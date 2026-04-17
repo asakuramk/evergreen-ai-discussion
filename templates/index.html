@@ -143,9 +143,6 @@
     let lastRound = null;
     let totalRounds = 10;
 
-    // 議論データ蓄積用
-    let discussionLog = { theme_name: '', model: '', personas: [], moderator: {}, agenda_results: [], conclusion: '' };
-    let currentAgendaResult = null;
 
     // Load Ollama models
     async function loadModels() {
@@ -329,14 +326,6 @@
         document.getElementById('saveArea').innerHTML = '';
         currentAgendaMsgsEl = null;
 
-        const model = document.getElementById('modelSelect').value;
-        discussionLog = {
-            theme_name: selectedThemeName, model,
-            personas: currentPersonas, moderator: currentModerator,
-            agenda_results: [], conclusion: '',
-        };
-        currentAgendaResult = null;
-
         const params = new URLSearchParams({
             theme_name: selectedThemeName,
             agenda: JSON.stringify(checkedItems),
@@ -355,8 +344,7 @@
                 case 'agenda_start':
                     setStatus(`議題 ${data.index}/${data.total}：${data.item}`, true);
                     getOrCreateAgendaBlock(data.item);
-                    currentAgendaResult = { item: data.item, messages: [], summary: '' };
-                    discussionLog.agenda_results.push(currentAgendaResult);
+                    setStatus(`自動保存中: ${data.draft}`, true);
                     break;
                 case 'round_start':
                     totalRounds = data.total_rounds;
@@ -367,7 +355,6 @@
                     break;
                 case 'message':
                     if (currentAgendaMsgsEl) appendMessage(currentAgendaMsgsEl, data.speaker, data.response, data.round);
-                    if (currentAgendaResult) currentAgendaResult.messages.push({ round: data.round, speaker: data.speaker, response: data.response });
                     break;
                 case 'summarizing':
                     setStatus(`${modName} がまとめを作成中…`, true);
@@ -380,7 +367,6 @@
                     break;
                 case 'summary':
                     if (currentAgendaMsgsEl) appendSummary(currentAgendaMsgsEl, modName, data.summary);
-                    if (currentAgendaResult) currentAgendaResult.summary = data.summary;
                     break;
                 case 'concluding':
                     setStatus(`${modName} が最終結論を起草中…`, true);
@@ -390,14 +376,20 @@
                     div.className = 'conclusion-block';
                     div.innerHTML = `<h2>総合まとめ（${esc(modName)}）</h2><p>${data.text.replace(/\n/g,'<br>')}</p>`;
                     document.getElementById('results').appendChild(div);
-                    discussionLog.conclusion = data.text;
                     div.scrollIntoView({ behavior: 'smooth' });
+                    break;
+                }
+                case 'saved': {
+                    const bar = document.getElementById('saveArea');
+                    bar.innerHTML = `<div style="background:#e8f5e9;border:1px solid #4caf50;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:0.92em;color:#2e7d32;">
+                        <strong>✓ 保存完了：</strong> ${esc(data.filename)}<br>
+                        <span style="color:#555;font-size:0.88em;">${esc(data.filepath)}</span>
+                    </div>`;
                     break;
                 }
                 case 'done':
                     setStatus('議論が完了しました。', false);
                     document.getElementById('runBtn').disabled = false;
-                    showSaveButton();
                     es.close();
                     break;
                 case 'error':
@@ -407,34 +399,6 @@
                     break;
             }
         };
-
-        function showSaveButton() {
-            document.getElementById('saveArea').innerHTML =
-                `<button onclick="saveReport()" style="display:block;width:100%;padding:12px;background:#0056b3;color:#fff;border:none;border-radius:8px;font-size:1.05em;cursor:pointer;margin-bottom:16px;font-weight:bold;">
-                    MDファイルとして保存する
-                </button>`;
-        }
-
-        async function saveReport() {
-            const btn = document.querySelector('#saveArea button');
-            btn.disabled = true;
-            btn.textContent = '保存中（タイトル生成中）…';
-            try {
-                const res = await fetch('/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(discussionLog),
-                });
-                const result = await res.json();
-                btn.style.background = '#28a745';
-                btn.textContent = `✓ 保存完了：${result.filename}`;
-                btn.disabled = true;
-            } catch (e) {
-                btn.disabled = false;
-                btn.textContent = 'エラー：保存に失敗しました';
-                btn.style.background = '#dc3545';
-            }
-        }
 
         es.onerror = () => {
             setStatus('', false);

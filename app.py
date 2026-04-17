@@ -269,12 +269,36 @@ def run_discussion():
     mod_name = moderator.get('name', 'モデレーター')
     mod_desc = moderator.get('desc', '中立的な立場で議論を整理するファシリテーター')
 
+    # ファイル準備
+    reports_dir = os.path.join(os.path.dirname(__file__), 'reports')
+    os.makedirs(reports_dir, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    draft_path = os.path.join(reports_dir, f'{timestamp}_draft.md')
+
+    header = (
+        f"# （議論中）\n\n"
+        f"**テーマ:** {theme_name}　"
+        f"**開始:** {datetime.now().strftime('%Y-%m-%d %H:%M')}　"
+        f"**モデル:** {model or '不明'}\n\n"
+        f"**論客:** {' / '.join(p['name'] for p in personas)}\n"
+        f"**まとめ役:** {mod_name}\n\n---\n\n"
+    )
+    with open(draft_path, 'w', encoding='utf-8') as f:
+        f.write(header)
+
+    def append(text):
+        with open(draft_path, 'a', encoding='utf-8') as f:
+            f.write(text)
+
     def generate():
         final_report = []
 
         for agenda_idx, item in enumerate(agenda):
-            yield sse("agenda_start", index=agenda_idx + 1, total=len(agenda), item=item)
+            yield sse("agenda_start", index=agenda_idx + 1, total=len(agenda), item=item,
+                      draft=os.path.basename(draft_path))
+            append(f"## 議題：{item}\n\n")
             discussion_history = []
+            last_written_round = None
 
             for round_num in range(1, rounds + 1):
                 yield sse("round_start", round=round_num, total_rounds=rounds)
@@ -309,6 +333,12 @@ def run_discussion():
 
                     response = ask_gemma(system_prompt, user_prompt, model=model)
                     discussion_history.append({"round": round_num, "speaker": role, "response": response})
+
+                    if round_num != last_written_round:
+                        append(f"### Round {round_num}\n\n")
+                        last_written_round = round_num
+                    append(f"**{role}：** {response}\n\n")
+
                     yield sse("message", item=item, speaker=role, response=response, round=round_num)
 
             yield sse("summarizing", item=item)
@@ -322,6 +352,7 @@ def run_discussion():
                 f"議題「{item}」の議論:\n{history_text}\n\nまとめ:",
                 model=model,
             )
+            append(f"#### まとめ（{mod_name}）\n\n{summary}\n\n---\n\n")
             yield sse("summary", item=item, summary=summary)
             final_report.append(f"議題: {item}\n結果: {summary}")
 
@@ -335,7 +366,32 @@ def run_discussion():
             full_prompt,
             model=model,
         )
+        append(f"## 最終結論（{mod_name}）\n\n{conclusion}\n")
         yield sse("conclusion", text=conclusion)
+
+        # タイトル生成してファイル名確定
+        summary_for_title = "\n".join(f"- {r}" for r in final_report)
+        raw_title = ask_gemma(
+            "あなたは優秀なライターです。議論の内容を端的に表す日本語タイトルを1行だけ出力してください。記号・引用符不要。",
+            f"テーマ「{theme_name}」の議論要約:\n{summary_for_title}\n\n結論:\n{conclusion}\n\nタイトル:",
+            model=model,
+        )
+        title = raw_title.strip().strip('#').strip('"').strip('「').strip('」').split('\n')[0].strip()
+        if not title:
+            title = theme_name
+
+        with open(draft_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        content = content.replace('# （議論中）', f'# {title}', 1)
+
+        safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
+        final_filename = f"{timestamp}_{safe_title}.md"
+        final_path = os.path.join(reports_dir, final_filename)
+        with open(final_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        os.remove(draft_path)
+
+        yield sse("saved", filename=final_filename, filepath=final_path, title=title)
         yield sse("done")
 
     return Response(
@@ -343,82 +399,6 @@ def run_discussion():
         mimetype='text/event-stream',
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
-
-
-@app.route('/save', methods=['POST'])
-def save_report():
-    data = request.get_json()
-    theme_name   = data.get('theme_name', '議論')
-    model        = data.get('model', '')
-    personas     = data.get('personas', [])
-    moderator    = data.get('moderator', {})
-    agenda_results = data.get('agenda_results', [])
-    conclusion   = data.get('conclusion', '')
-
-    # AI でタイトル生成
-    summary_for_title = "\n".join(
-        f"- {r['item']}: {r['summary']}" for r in agenda_results if r.get('summary')
-    )
-    raw_title = ask_gemma(
-        "あなたは優秀なライターです。議論の内容を端的に表す日本語タイトルを1行だけ出力してください。",
-        f"テーマ「{theme_name}」の議論要約:\n{summary_for_title}\n\n結論:\n{conclusion}\n\nタイトル:",
-        model=model or None,
-    )
-    title = raw_title.strip().strip('#').strip('"').strip('「').strip('」').split('\n')[0].strip()
-    if not title:
-        title = theme_name
-
-    # Markdown 生成
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    lines = [
-        f"# {title}",
-        f"",
-        f"**テーマ:** {theme_name}　**日時:** {now}　**モデル:** {model}",
-        f"",
-        f"**論客:** {' / '.join(p['name'] for p in personas)}",
-        f"**まとめ役:** {moderator.get('name', 'モデレーター')}",
-        f"",
-        f"---",
-        f"",
-    ]
-
-    for result in agenda_results:
-        lines.append(f"## 議題：{result['item']}")
-        lines.append("")
-        last_round = None
-        for msg in result.get('messages', []):
-            if msg['round'] != last_round:
-                last_round = msg['round']
-                lines.append(f"### Round {msg['round']}")
-                lines.append("")
-            lines.append(f"**{msg['speaker']}：** {msg['response']}")
-            lines.append("")
-        if result.get('summary'):
-            lines.append(f"#### まとめ（{moderator.get('name', 'モデレーター')}）")
-            lines.append("")
-            lines.append(result['summary'])
-            lines.append("")
-        lines.append("---")
-        lines.append("")
-
-    if conclusion:
-        lines.append(f"## 最終結論（{moderator.get('name', 'モデレーター')}）")
-        lines.append("")
-        lines.append(conclusion)
-        lines.append("")
-
-    content = "\n".join(lines)
-
-    # ファイル保存
-    reports_dir = os.path.join(os.path.dirname(__file__), 'reports')
-    os.makedirs(reports_dir, exist_ok=True)
-    safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
-    filename = f"{datetime.now().strftime('%Y%m%d_%H%M')}_{safe_title}.md"
-    filepath = os.path.join(reports_dir, filename)
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
-
-    return jsonify({"filename": filename, "filepath": filepath, "title": title})
 
 
 if __name__ == '__main__':

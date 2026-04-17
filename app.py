@@ -1,4 +1,5 @@
-from flask import Flask, render_template, jsonify
+import json
+from flask import Flask, render_template, Response, stream_with_context
 import requests
 
 app = Flask(__name__)
@@ -32,16 +33,16 @@ def ask_gemma(role_name, role_desc, prompt):
         "stream": False
     }
     try:
-        r = requests.post(OLLAMA_URL, json=payload, timeout=60)
+        r = requests.post(OLLAMA_URL, json=payload, timeout=120)
         r.raise_for_status()
         return r.json()['message']['content']
     except Exception as e:
         return f"（沈黙: {e}）"
 
 
-def summarize(history):
-    prompt = f"以下の議論を要約し、次のステップへの合意事項を抽出してください:\n\n{history}"
-    return ask_gemma("モデレーター", "中立的な立場の議事録作成者", prompt)
+def sse(event_type, **kwargs):
+    data = json.dumps({"type": event_type, **kwargs}, ensure_ascii=False)
+    return f"data: {data}\n\n"
 
 
 @app.route('/')
@@ -49,35 +50,39 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/run_discussion', methods=['POST'])
+@app.route('/run_discussion', methods=['GET'])
 def run_discussion():
-    history_log = []
-    summaries = {}
-    final_report = []
+    def generate():
+        final_report = []
 
-    for i, item in enumerate(AGENDA, 1):
-        discussion_history = ""
+        for i, item in enumerate(AGENDA, 1):
+            yield sse("agenda_start", index=i, item=item)
+            discussion_history = ""
 
-        for role, desc in ROLES.items():
-            response = ask_gemma(
-                role, desc,
-                f"議題「{item}」について発言してください。\nこれまでの議論: {discussion_history}"
-            )
-            history_log.append({"step": item, "speaker": role, "response": response})
-            discussion_history += f"{role}: {response}\n"
+            for role, desc in ROLES.items():
+                yield sse("thinking", speaker=role)
+                response = ask_gemma(
+                    role, desc,
+                    f"議題「{item}」について発言してください。\nこれまでの議論: {discussion_history}"
+                )
+                yield sse("message", step=item, speaker=role, response=response)
+                discussion_history += f"{role}: {response}\n"
 
-        summary = summarize(discussion_history)
-        summaries[item] = summary
-        final_report.append(f"議題: {item}\n結果: {summary}")
+            yield sse("summarizing")
+            summary = ask_gemma("モデレーター", "中立的な立場の議事録作成者",
+                                f"以下の議論を要約し、合意事項を抽出してください:\n\n{discussion_history}")
+            yield sse("summary", item=item, summary=summary)
+            final_report.append(f"議題: {item}\n結果: {summary}")
 
-    full_summary_prompt = "以下の各議題の合意事項を統合し、プロジェクトの最終意思決定案を作成してください:\n\n" + "\n".join(final_report)
-    total_conclusion = ask_gemma("総括責任者", "プロジェクトの最終判断を下すCEO", full_summary_prompt)
+        yield sse("concluding")
+        full_prompt = "以下の各議題の合意事項を統合し、プロジェクトの最終意思決定案を作成してください:\n\n" + "\n".join(final_report)
+        conclusion = ask_gemma("総括責任者", "プロジェクトの最終判断を下すCEO", full_prompt)
+        yield sse("conclusion", text=conclusion)
+        yield sse("done")
 
-    return jsonify({
-        "history": history_log,
-        "summaries": summaries,
-        "conclusion": total_conclusion
-    })
+    return Response(stream_with_context(generate()),
+                    mimetype='text/event-stream',
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 if __name__ == '__main__':

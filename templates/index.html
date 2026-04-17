@@ -326,6 +326,7 @@
         document.getElementById('saveArea').innerHTML = '';
         currentAgendaMsgsEl = null;
 
+        const model = document.getElementById('modelSelect').value;
         const params = new URLSearchParams({
             theme_name: selectedThemeName,
             agenda: JSON.stringify(checkedItems),

@@ -1,5 +1,7 @@
 import json
+import os
 import re
+from datetime import datetime
 from flask import Flask, render_template, Response, stream_with_context, request, jsonify
 import requests
 
@@ -341,6 +343,82 @@ def run_discussion():
         mimetype='text/event-stream',
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
+
+
+@app.route('/save', methods=['POST'])
+def save_report():
+    data = request.get_json()
+    theme_name   = data.get('theme_name', '議論')
+    model        = data.get('model', '')
+    personas     = data.get('personas', [])
+    moderator    = data.get('moderator', {})
+    agenda_results = data.get('agenda_results', [])
+    conclusion   = data.get('conclusion', '')
+
+    # AI でタイトル生成
+    summary_for_title = "\n".join(
+        f"- {r['item']}: {r['summary']}" for r in agenda_results if r.get('summary')
+    )
+    raw_title = ask_gemma(
+        "あなたは優秀なライターです。議論の内容を端的に表す日本語タイトルを1行だけ出力してください。",
+        f"テーマ「{theme_name}」の議論要約:\n{summary_for_title}\n\n結論:\n{conclusion}\n\nタイトル:",
+        model=model or None,
+    )
+    title = raw_title.strip().strip('#').strip('"').strip('「').strip('」').split('\n')[0].strip()
+    if not title:
+        title = theme_name
+
+    # Markdown 生成
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    lines = [
+        f"# {title}",
+        f"",
+        f"**テーマ:** {theme_name}　**日時:** {now}　**モデル:** {model}",
+        f"",
+        f"**論客:** {' / '.join(p['name'] for p in personas)}",
+        f"**まとめ役:** {moderator.get('name', 'モデレーター')}",
+        f"",
+        f"---",
+        f"",
+    ]
+
+    for result in agenda_results:
+        lines.append(f"## 議題：{result['item']}")
+        lines.append("")
+        last_round = None
+        for msg in result.get('messages', []):
+            if msg['round'] != last_round:
+                last_round = msg['round']
+                lines.append(f"### Round {msg['round']}")
+                lines.append("")
+            lines.append(f"**{msg['speaker']}：** {msg['response']}")
+            lines.append("")
+        if result.get('summary'):
+            lines.append(f"#### まとめ（{moderator.get('name', 'モデレーター')}）")
+            lines.append("")
+            lines.append(result['summary'])
+            lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    if conclusion:
+        lines.append(f"## 最終結論（{moderator.get('name', 'モデレーター')}）")
+        lines.append("")
+        lines.append(conclusion)
+        lines.append("")
+
+    content = "\n".join(lines)
+
+    # ファイル保存
+    reports_dir = os.path.join(os.path.dirname(__file__), 'reports')
+    os.makedirs(reports_dir, exist_ok=True)
+    safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
+    filename = f"{datetime.now().strftime('%Y%m%d_%H%M')}_{safe_title}.md"
+    filepath = os.path.join(reports_dir, filename)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    return jsonify({"filename": filename, "filepath": filepath, "title": title})
 
 
 if __name__ == '__main__':

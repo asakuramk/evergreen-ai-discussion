@@ -108,6 +108,14 @@
             <div class="persona-grid" id="personaGrid"></div>
         </div>
 
+        <div class="rounds-row" style="margin-top:20px; padding-top:16px; border-top:1px solid #eee;">
+            <label>使用モデル</label>
+            <select id="modelSelect" style="flex:1; padding:7px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.92em;">
+                <option value="">読み込み中…</option>
+            </select>
+            <button onclick="loadModels()" style="padding:7px 12px; background:#6c757d; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.85em;">↺</button>
+        </div>
+
         <div class="rounds-row">
             <label>ラウンド数</label>
             <input type="range" id="roundsRange" min="3" max="20" value="10"
@@ -133,6 +141,24 @@
     let currentAgendaMsgsEl = null;
     let lastRound = null;
     let totalRounds = 10;
+
+    // Load Ollama models
+    async function loadModels() {
+        const sel = document.getElementById('modelSelect');
+        sel.innerHTML = '<option value="">読み込み中…</option>';
+        try {
+            const res = await fetch('/models');
+            const data = await res.json();
+            if (data.models?.length) {
+                sel.innerHTML = data.models.map(m => `<option value="${m}">${m}</option>`).join('');
+            } else {
+                sel.innerHTML = '<option value="">モデルが見つかりません</option>';
+            }
+        } catch {
+            sel.innerHTML = '<option value="">Ollama未接続</option>';
+        }
+    }
+    loadModels();
 
     // Build preset cards
     PRESETS.forEach(p => {
@@ -178,7 +204,8 @@
         setStatus('AIが議題とペルソナを生成中…', true);
 
         try {
-            const res = await fetch(`/setup?theme=${encodeURIComponent(theme)}`);
+            const model = document.getElementById('modelSelect').value;
+        const res = await fetch(`/setup?theme=${encodeURIComponent(theme)}&model=${encodeURIComponent(model)}`);
             const data = await res.json();
             if (data.agenda?.length && data.personas?.length) {
                 selectedThemeName = theme;
@@ -296,11 +323,13 @@
         document.getElementById('results').innerHTML = '';
         currentAgendaMsgsEl = null;
 
+        const model = document.getElementById('modelSelect').value;
         const params = new URLSearchParams({
             theme_name: selectedThemeName,
             agenda: JSON.stringify(checkedItems),
             personas: JSON.stringify(currentPersonas),
             moderator: JSON.stringify(currentModerator),
+            model,
             rounds,
         });
 

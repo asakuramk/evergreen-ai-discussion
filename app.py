@@ -5,8 +5,8 @@ import requests
 
 app = Flask(__name__)
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL_NAME = "gemma4:e2b"
+OLLAMA_BASE = "http://localhost:11434"
+OLLAMA_URL  = f"{OLLAMA_BASE}/api/chat"
 
 PRESET_THEMES = [
     {
@@ -107,9 +107,9 @@ PRESET_THEMES = [
 ]
 
 
-def ask_gemma(system_prompt, user_prompt):
+def ask_gemma(system_prompt, user_prompt, model=None):
     payload = {
-        "model": MODEL_NAME,
+        "model": model or "gemma4:e2b",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -170,6 +170,17 @@ def sse(event_type, **kwargs):
     return f"data: {data}\n\n"
 
 
+@app.route('/models')
+def list_models():
+    try:
+        r = requests.get(f"{OLLAMA_BASE}/api/tags", timeout=5)
+        r.raise_for_status()
+        names = [m['name'] for m in r.json().get('models', [])]
+        return jsonify({"models": names})
+    except Exception as e:
+        return jsonify({"models": [], "error": str(e)})
+
+
 @app.route('/')
 def index():
     return render_template('index.html', presets=PRESET_THEMES)
@@ -179,13 +190,15 @@ def index():
 def setup():
     """Generate agenda + 4 personas + moderator for a custom theme."""
     theme = request.args.get('theme', '').strip()
+    model = request.args.get('model', '').strip() or None
     if not theme:
         return jsonify({"error": "theme is required"}), 400
 
     agenda_raw = ask_gemma(
         "あなたは企業の議論ファシリテーターです。",
         f'テーマ「{theme}」について経営会議で議論すべき重要な議題を5つ生成してください。'
-        f'各議題は15〜25文字の簡潔な名詞句で。必ずJSON配列で返してください: ["議題1","議題2","議題3","議題4","議題5"]'
+        f'各議題は15〜25文字の簡潔な名詞句で。必ずJSON配列で返してください: ["議題1","議題2","議題3","議題4","議題5"]',
+        model=model,
     )
     agenda = [str(i).strip() for i in (parse_list(agenda_raw) or []) if str(i).strip()]
     if not agenda:
@@ -200,7 +213,8 @@ def setup():
         f'[{{"name":"役職や肩書き","desc":"この人物の視点・価値観・議論スタンス（40〜60文字）"}},'
         f' {{"name":"...","desc":"..."}},'
         f' {{"name":"...","desc":"..."}},'
-        f' {{"name":"...","desc":"..."}}]'
+        f' {{"name":"...","desc":"..."}}]',
+        model=model,
     )
     personas = parse_personas(personas_raw)
     if len(personas) < 4:
@@ -217,7 +231,8 @@ def setup():
         "あなたは議論設計の専門家です。",
         f'テーマ「{theme}」の議論をまとめる中立的なモデレーターを1名設定してください。'
         f'このテーマに精通した専門家でありながら中立的な立場の人物で。'
-        f'必ずJSON形式で返してください: {{"name":"役職や肩書き","desc":"この人物の特徴（30〜50文字）"}}'
+        f'必ずJSON形式で返してください: {{"name":"役職や肩書き","desc":"この人物の特徴（30〜50文字）"}}',
+        model=model,
     )
     mod_match = re.search(r'\{[^{}]+\}', moderator_raw, re.DOTALL)
     moderator = {"name": "モデレーター", "desc": "中立的な立場で議論を整理し合意形成を促すファシリテーター"}
@@ -235,6 +250,7 @@ def setup():
 @app.route('/run_discussion')
 def run_discussion():
     theme_name = request.args.get('theme_name', '議論')
+    model = request.args.get('model', '').strip() or None
     rounds = max(1, min(int(request.args.get('rounds', 10)), 20))
     try:
         agenda = json.loads(request.args.get('agenda', '[]'))
@@ -289,7 +305,7 @@ def run_discussion():
                         )
                         user_prompt = f"これまでの議論:\n{history_text}\n\nあなたの発言:"
 
-                    response = ask_gemma(system_prompt, user_prompt)
+                    response = ask_gemma(system_prompt, user_prompt, model=model)
                     discussion_history.append({"round": round_num, "speaker": role, "response": response})
                     yield sse("message", item=item, speaker=role, response=response, round=round_num)
 
@@ -301,7 +317,8 @@ def run_discussion():
             summary = ask_gemma(
                 f"あなたは{mod_name}です。{mod_desc}\n"
                 f"議論を整理し、合意点・対立点・次のアクションを簡潔にまとめてください。",
-                f"議題「{item}」の議論:\n{history_text}\n\nまとめ:"
+                f"議題「{item}」の議論:\n{history_text}\n\nまとめ:",
+                model=model,
             )
             yield sse("summary", item=item, summary=summary)
             final_report.append(f"議題: {item}\n結果: {summary}")
@@ -313,7 +330,8 @@ def run_discussion():
         )
         conclusion = ask_gemma(
             f"あなたは{mod_name}です。{mod_desc}\n全議論を統合し、明確な意思決定と次のステップを示してください。",
-            full_prompt
+            full_prompt,
+            model=model,
         )
         yield sse("conclusion", text=conclusion)
         yield sse("done")

@@ -3,118 +3,208 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project Evergreen 議論ダッシュボード</title>
+    <title>Evergreen 議論ダッシュボード</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; margin: 0; padding: 20px; }
         .container { max-width: 960px; margin: 0 auto; }
 
+        /* Config panel */
         .config-panel { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-        .config-panel h1 { margin: 0 0 20px; color: #0056b3; font-size: 1.4em; border-bottom: 3px solid #0056b3; padding-bottom: 10px; }
+        h1 { margin: 0 0 20px; color: #0056b3; font-size: 1.4em; border-bottom: 3px solid #0056b3; padding-bottom: 10px; }
+        .section-label { font-weight: bold; color: #444; margin-bottom: 10px; display: block; }
 
-        .config-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; }
-        .config-section { flex: 1; min-width: 200px; }
-        .config-section label { font-weight: bold; display: block; margin-bottom: 8px; color: #444; }
-        select { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95em; }
+        /* Preset theme cards */
+        .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .preset-card { border: 2px solid #dde; border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.15s; background: #fafafa; }
+        .preset-card:hover { border-color: #007bff; background: #f0f7ff; }
+        .preset-card.selected { border-color: #0056b3; background: #e8f0fe; }
+        .preset-card .card-name { font-weight: bold; font-size: 0.95em; color: #0056b3; margin-bottom: 4px; }
+        .preset-card .card-desc { font-size: 0.8em; color: #666; }
 
-        .agenda-checks { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-        .agenda-checks label { font-weight: normal; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em; color: #333; }
+        /* Custom input */
+        .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #aaa; font-size: 0.9em; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #ddd; }
+        .custom-row { display: flex; gap: 10px; }
+        .custom-row input { flex: 1; padding: 9px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95em; }
+        .custom-row input:focus { outline: none; border-color: #007bff; box-shadow: 0 0 0 2px rgba(0,123,255,0.15); }
+        .gen-btn { padding: 9px 16px; background: #6c757d; color: #fff; border: none; border-radius: 6px; cursor: pointer; white-space: nowrap; font-size: 0.95em; }
+        .gen-btn:hover:not(:disabled) { background: #5a6268; }
+        .gen-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        .rounds-row { display: flex; align-items: center; gap: 12px; }
+        /* Agenda checks */
+        .agenda-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; }
+        .agenda-checks { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+        .agenda-checks label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.92em; padding: 5px 8px; border-radius: 5px; transition: background 0.1s; }
+        .agenda-checks label:hover { background: #f5f5f5; }
+        .agenda-checks input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+
+        /* Rounds */
+        .rounds-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+        .rounds-row label { font-weight: bold; color: #444; white-space: nowrap; }
         .rounds-row input[type=range] { flex: 1; }
-        .rounds-val { font-weight: bold; color: #0056b3; min-width: 2em; text-align: center; }
+        .rounds-val { font-weight: bold; color: #0056b3; min-width: 2em; text-align: center; font-size: 1.1em; }
 
-        .run-btn { display: block; width: 100%; padding: 12px; background: #28a745; color: #fff; border: none; border-radius: 8px; font-size: 1.05em; cursor: pointer; margin-top: 20px; transition: background 0.2s; }
+        /* Run button */
+        .run-btn { display: block; width: 100%; padding: 13px; background: #28a745; color: #fff; border: none; border-radius: 8px; font-size: 1.05em; cursor: pointer; margin-top: 20px; transition: background 0.2s; font-weight: bold; }
         .run-btn:hover:not(:disabled) { background: #218838; }
         .run-btn:disabled { background: #aaa; cursor: not-allowed; }
 
-        .status-bar { background: #fff; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; font-style: italic; color: #555; box-shadow: 0 1px 4px rgba(0,0,0,0.06); min-height: 40px; }
+        /* Status */
+        .status-bar { background: #fff; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; color: #555; font-style: italic; box-shadow: 0 1px 4px rgba(0,0,0,0.06); min-height: 40px; display: flex; align-items: center; gap: 8px; }
+        .spinner { width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: #007bff; border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; display: none; }
+        .spinner.active { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* Results */
         .agenda-block { background: #fff; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
         .agenda-title { background: linear-gradient(135deg, #0056b3, #007bff); color: #fff; padding: 12px 18px; font-weight: bold; font-size: 1.05em; }
-
-        .round-header { padding: 6px 18px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: 0.82em; font-weight: bold; color: #666; letter-spacing: 0.05em; text-transform: uppercase; }
-
-        .message { display: flex; gap: 12px; padding: 10px 18px; border-bottom: 1px solid #f0f0f0; animation: fadein 0.3s ease; }
-        .message:last-child { border-bottom: none; }
-        .speaker-tag { font-weight: bold; min-width: 130px; color: #0056b3; flex-shrink: 0; font-size: 0.9em; padding-top: 2px; }
-        .bubble { line-height: 1.65; flex: 1; font-size: 0.95em; }
-
-        .thinking-row { padding: 8px 18px; color: #999; font-style: italic; font-size: 0.9em; animation: pulse 1.2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
-        @keyframes fadein { from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none} }
-
-        .summary-block { margin: 12px 18px 16px; background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px 14px; border-radius: 4px; font-size: 0.95em; }
-        .summary-block strong { color: #2e7d32; display: block; margin-bottom: 4px; }
-
+        .round-header { padding: 5px 18px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: 0.78em; font-weight: bold; color: #888; letter-spacing: 0.08em; text-transform: uppercase; }
+        .message { display: flex; gap: 12px; padding: 10px 18px; border-bottom: 1px solid #f2f2f2; animation: fadein 0.25s ease; }
+        .speaker-tag { font-weight: bold; min-width: 140px; color: #0056b3; flex-shrink: 0; font-size: 0.88em; padding-top: 3px; }
+        .bubble { line-height: 1.65; flex: 1; font-size: 0.93em; }
+        .thinking-row { padding: 8px 18px; color: #aaa; font-style: italic; font-size: 0.88em; animation: pulse 1.2s infinite; }
+        .summary-block { margin: 12px 18px 16px; background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px 14px; border-radius: 4px; font-size: 0.93em; line-height: 1.6; }
+        .summary-block strong { color: #2e7d32; display: block; margin-bottom: 4px; font-size: 0.9em; }
         .conclusion-block { background: #fff; border: 2px solid #ff9800; border-radius: 10px; padding: 20px; margin-top: 24px; box-shadow: 0 2px 12px rgba(255,152,0,0.15); animation: fadein 0.4s ease; }
         .conclusion-block h2 { margin-top: 0; color: #e65100; }
-
         .error { color: #c0392b; background: #fdf0ef; border: 1px solid #e74c3c; border-radius: 6px; padding: 12px 16px; margin-top: 12px; }
+
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+        @keyframes fadein { from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none} }
     </style>
 </head>
 <body>
+<script type="application/json" id="presets-data">{{ presets | tojson }}</script>
+
 <div class="container">
     <div class="config-panel">
-        <h1>Project Evergreen 議論ダッシュボード</h1>
+        <h1>Evergreen 議論ダッシュボード</h1>
 
-        <div class="config-row">
-            <div class="config-section">
-                <label>議論テーマ</label>
-                <select id="themeSelect" onchange="onThemeChange()">
-                    {% for key, name in themes.items() %}
-                    <option value="{{ key }}">{{ name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="config-section">
-                <label>ラウンド数（議題ごと）</label>
-                <div class="rounds-row">
-                    <input type="range" id="roundsRange" min="3" max="20" value="10"
-                           oninput="document.getElementById('roundsVal').textContent=this.value">
-                    <span class="rounds-val" id="roundsVal">10</span> 回
-                </div>
-            </div>
+        <span class="section-label">おすすめテーマ</span>
+        <div class="preset-grid" id="presetGrid"></div>
+
+        <div class="divider">または自由入力</div>
+        <div class="custom-row">
+            <input type="text" id="customTheme" placeholder="議論テーマを入力（例: 新規事業立ち上げ戦略）" oninput="onCustomInput()">
+            <button class="gen-btn" id="genBtn" onclick="generateAgenda()" disabled>議題を生成</button>
         </div>
 
-        <div class="config-section">
-            <label>議題を選択（複数可）</label>
+        <div class="agenda-section" id="agendaSection" style="display:none">
+            <span class="section-label">議題（チェックで選択）</span>
             <div class="agenda-checks" id="agendaChecks"></div>
         </div>
 
-        <button class="run-btn" id="runBtn" onclick="runDiscussion()">議論を開始する</button>
+        <div class="rounds-row">
+            <label>ラウンド数</label>
+            <input type="range" id="roundsRange" min="3" max="20" value="10"
+                   oninput="document.getElementById('roundsVal').textContent=this.value">
+            <span class="rounds-val" id="roundsVal">10</span> 回
+        </div>
+
+        <button class="run-btn" id="runBtn" onclick="runDiscussion()" disabled>議論を開始する</button>
     </div>
 
-    <div class="status-bar" id="status">テーマと議題を選んで「議論を開始する」を押してください。</div>
+    <div class="status-bar" id="statusBar">
+        <div class="spinner" id="spinner"></div>
+        <span id="statusText">テーマを選ぶか入力してください。</span>
+    </div>
     <div id="results"></div>
 </div>
 
-<script type="application/json" id="themes-data">{{ themes_agenda | tojson }}</script>
 <script>
-    const themesAgenda = JSON.parse(document.getElementById('themes-data').textContent);
+    const PRESETS = JSON.parse(document.getElementById('presets-data').textContent);
+    let selectedThemeName = '';
+    let selectedAgenda = [];
     let currentAgendaMsgsEl = null;
-    let currentRoundEl = null;
     let lastRound = null;
+    let totalRounds = 10;
 
-    function onThemeChange() {
-        const theme = document.getElementById('themeSelect').value;
-        const agenda = themesAgenda[theme] || [];
-        const container = document.getElementById('agendaChecks');
-        container.innerHTML = agenda.map((item, i) =>
-            `<label><input type="checkbox" value="${i}" checked> ${item}</label>`
-        ).join('');
+    // --- Build preset cards ---
+    const grid = document.getElementById('presetGrid');
+    PRESETS.forEach((p, i) => {
+        const card = document.createElement('div');
+        card.className = 'preset-card';
+        card.dataset.key = p.key;
+        card.innerHTML = `<div class="card-name">${p.name}</div><div class="card-desc">${p.desc}</div>`;
+        card.onclick = () => selectPreset(p, card);
+        grid.appendChild(card);
+    });
+
+    function selectPreset(preset, cardEl) {
+        document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+        cardEl.classList.add('selected');
+        document.getElementById('customTheme').value = '';
+        document.getElementById('genBtn').disabled = true;
+        selectedThemeName = preset.name;
+        showAgenda(preset.agenda);
     }
 
-    onThemeChange();
+    function onCustomInput() {
+        document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+        const val = document.getElementById('customTheme').value.trim();
+        document.getElementById('genBtn').disabled = !val;
+        if (!val) {
+            selectedThemeName = '';
+            selectedAgenda = [];
+            document.getElementById('agendaSection').style.display = 'none';
+            document.getElementById('runBtn').disabled = true;
+        }
+    }
 
+    async function generateAgenda() {
+        const theme = document.getElementById('customTheme').value.trim();
+        if (!theme) return;
+        const genBtn = document.getElementById('genBtn');
+        genBtn.disabled = true;
+        genBtn.textContent = '生成中…';
+        setStatus('AIが議題を生成中…', true);
+
+        try {
+            const res = await fetch(`/generate_agenda?theme=${encodeURIComponent(theme)}`);
+            const data = await res.json();
+            if (data.agenda && data.agenda.length) {
+                selectedThemeName = theme;
+                showAgenda(data.agenda);
+                setStatus('議題を生成しました。', false);
+            } else {
+                setStatus('議題の生成に失敗しました。', false);
+            }
+        } catch (e) {
+            setStatus('エラー: サーバーに接続できません。', false);
+        }
+        genBtn.disabled = false;
+        genBtn.textContent = '議題を生成';
+    }
+
+    function showAgenda(items) {
+        const container = document.getElementById('agendaChecks');
+        container.innerHTML = items.map((item, i) =>
+            `<label><input type="checkbox" value="${escapeHtml(item)}" checked> ${escapeHtml(item)}</label>`
+        ).join('');
+        document.getElementById('agendaSection').style.display = 'block';
+        document.getElementById('runBtn').disabled = false;
+        selectedAgenda = items;
+    }
+
+    function escapeHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function setStatus(msg, spinning) {
+        document.getElementById('statusText').textContent = msg;
+        document.getElementById('spinner').classList.toggle('active', !!spinning);
+    }
+
+    // --- Run discussion ---
     function getOrCreateAgendaBlock(item) {
-        const id = 'agenda-' + CSS.escape(item.replace(/\s/g, '_').slice(0, 30));
+        const id = 'ag-' + btoa(encodeURIComponent(item)).replace(/[^a-z0-9]/gi, '').slice(0, 20);
         let el = document.getElementById(id);
         if (!el) {
             el = document.createElement('div');
             el.className = 'agenda-block';
             el.id = id;
-            el.innerHTML = `<div class="agenda-title">${item}</div><div class="msgs" id="${id}-msgs"></div>`;
+            el.innerHTML = `<div class="agenda-title">${escapeHtml(item)}</div><div class="msgs" id="${id}-msgs"></div>`;
             document.getElementById('results').appendChild(el);
         }
         currentAgendaMsgsEl = document.getElementById(id + '-msgs');
@@ -122,27 +212,25 @@
         return currentAgendaMsgsEl;
     }
 
-    function ensureRoundHeader(container, round, total) {
+    function ensureRoundHeader(container, round) {
         if (lastRound === round) return;
         lastRound = round;
         const div = document.createElement('div');
         div.className = 'round-header';
-        div.textContent = `ラウンド ${round} / ${total}`;
+        div.textContent = `Round ${round} / ${totalRounds}`;
         container.appendChild(div);
-        currentRoundEl = div;
     }
 
     function removeThinking(container) {
-        const t = container.querySelector('.thinking-row');
-        if (t) t.remove();
+        container.querySelector('.thinking-row')?.remove();
     }
 
-    function appendMessage(container, speaker, response, round, totalRounds) {
-        ensureRoundHeader(container, round, totalRounds);
+    function appendMessage(container, speaker, response, round) {
+        ensureRoundHeader(container, round);
         removeThinking(container);
         const div = document.createElement('div');
         div.className = 'message';
-        div.innerHTML = `<span class="speaker-tag">${speaker}</span><span class="bubble">${response.replace(/\n/g, '<br>')}</span>`;
+        div.innerHTML = `<span class="speaker-tag">${escapeHtml(speaker)}</span><span class="bubble">${response.replace(/\n/g, '<br>')}</span>`;
         container.appendChild(div);
         div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -151,7 +239,7 @@
         removeThinking(container);
         const div = document.createElement('div');
         div.className = 'thinking-row';
-        div.textContent = `${speaker} が考え中… (R${round})`;
+        div.textContent = `${speaker} が考え中… (Round ${round})`;
         container.appendChild(div);
         div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -164,53 +252,44 @@
         container.appendChild(div);
     }
 
-    function setStatus(msg) {
-        document.getElementById('status').textContent = msg;
-    }
-
     async function runDiscussion() {
-        const theme = document.getElementById('themeSelect').value;
-        const rounds = document.getElementById('roundsRange').value;
-        const checked = [...document.querySelectorAll('#agendaChecks input:checked')].map(c => c.value);
+        const checkedItems = [...document.querySelectorAll('#agendaChecks input:checked')].map(c => c.value);
+        if (!checkedItems.length) { alert('議題を1つ以上選択してください。'); return; }
 
-        if (checked.length === 0) {
-            alert('議題を1つ以上選択してください。');
-            return;
-        }
+        const rounds = parseInt(document.getElementById('roundsRange').value);
+        totalRounds = rounds;
 
-        const btn = document.getElementById('runBtn');
-        btn.disabled = true;
+        document.getElementById('runBtn').disabled = true;
         document.getElementById('results').innerHTML = '';
         currentAgendaMsgsEl = null;
 
-        const params = new URLSearchParams({ theme, rounds, items: checked.join(',') });
+        const params = new URLSearchParams({
+            theme_name: selectedThemeName,
+            agenda: JSON.stringify(checkedItems),
+            rounds: rounds,
+        });
+
         const es = new EventSource(`/run_discussion?${params}`);
-        let totalRounds = parseInt(rounds);
 
         es.onmessage = (e) => {
             const data = JSON.parse(e.data);
-
             switch (data.type) {
                 case 'agenda_start':
-                    setStatus(`議題 ${data.index}/${data.total}：${data.item}`);
+                    setStatus(`議題 ${data.index}/${data.total}：${data.item}`, true);
                     getOrCreateAgendaBlock(data.item);
                     break;
-
                 case 'round_start':
                     totalRounds = data.total_rounds;
-                    setStatus(`議題進行中 — ラウンド ${data.round}/${data.total_rounds}`);
+                    setStatus(`議題進行中 — Round ${data.round}/${data.total_rounds}`, true);
                     break;
-
                 case 'thinking':
                     if (currentAgendaMsgsEl) showThinking(currentAgendaMsgsEl, data.speaker, data.round);
                     break;
-
                 case 'message':
-                    if (currentAgendaMsgsEl) appendMessage(currentAgendaMsgsEl, data.speaker, data.response, data.round, totalRounds);
+                    if (currentAgendaMsgsEl) appendMessage(currentAgendaMsgsEl, data.speaker, data.response, data.round);
                     break;
-
                 case 'summarizing':
-                    setStatus('モデレーターがまとめを作成中…');
+                    setStatus('モデレーターがまとめを作成中…', true);
                     if (currentAgendaMsgsEl) {
                         const d = document.createElement('div');
                         d.className = 'thinking-row';
@@ -218,15 +297,12 @@
                         currentAgendaMsgsEl.appendChild(d);
                     }
                     break;
-
                 case 'summary':
                     if (currentAgendaMsgsEl) appendSummary(currentAgendaMsgsEl, data.summary);
                     break;
-
                 case 'concluding':
-                    setStatus('CEO が最終結論を起草中…');
+                    setStatus('CEO が最終結論を起草中…', true);
                     break;
-
                 case 'conclusion': {
                     const div = document.createElement('div');
                     div.className = 'conclusion-block';
@@ -235,20 +311,24 @@
                     div.scrollIntoView({ behavior: 'smooth' });
                     break;
                 }
-
                 case 'done':
-                    setStatus('議論が完了しました。');
-                    btn.disabled = false;
+                    setStatus('議論が完了しました。', false);
+                    document.getElementById('runBtn').disabled = false;
+                    es.close();
+                    break;
+                case 'error':
+                    setStatus(data.message || 'エラーが発生しました。', false);
+                    document.getElementById('runBtn').disabled = false;
                     es.close();
                     break;
             }
         };
 
         es.onerror = () => {
-            setStatus('');
+            setStatus('', false);
             document.getElementById('results').insertAdjacentHTML('beforeend',
                 '<p class="error">エラーが発生しました。<code>python3 app.py</code> でサーバーを起動し、Ollamaも起動しているか確認してください。</p>');
-            btn.disabled = false;
+            document.getElementById('runBtn').disabled = false;
             es.close();
         };
     }

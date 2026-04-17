@@ -119,7 +119,7 @@ def ask_gemma(system_prompt, user_prompt, model=None):
         "stream": False,
     }
     try:
-        r = requests.post(OLLAMA_URL, json=payload, timeout=120)
+        r = requests.post(OLLAMA_URL, json=payload, timeout=600)
         r.raise_for_status()
         return r.json()['message']['content']
     except Exception as e:
@@ -287,112 +287,128 @@ def run_discussion():
         f.write(header)
 
     def append(text):
-        with open(draft_path, 'a', encoding='utf-8') as f:
-            f.write(text)
+        try:
+            with open(draft_path, 'a', encoding='utf-8') as f:
+                f.write(text)
+        except Exception:
+            pass
+
+    def keepalive():
+        """SSEコメント行を送ることで接続を維持する（Ollamaの待機中に使用）"""
+        return ": keepalive\n\n"
 
     def generate():
-        final_report = []
+        try:
+            final_report = []
 
-        for agenda_idx, item in enumerate(agenda):
-            yield sse("agenda_start", index=agenda_idx + 1, total=len(agenda), item=item,
-                      draft=os.path.basename(draft_path))
-            append(f"## 議題：{item}\n\n")
-            discussion_history = []
-            last_written_round = None
+            for agenda_idx, item in enumerate(agenda):
+                yield sse("agenda_start", index=agenda_idx + 1, total=len(agenda), item=item,
+                          draft=os.path.basename(draft_path))
+                append(f"## 議題：{item}\n\n")
+                discussion_history = []
+                last_written_round = None
 
-            for round_num in range(1, rounds + 1):
-                yield sse("round_start", round=round_num, total_rounds=rounds)
+                for round_num in range(1, rounds + 1):
+                    yield sse("round_start", round=round_num, total_rounds=rounds)
 
-                for persona in personas:
-                    role = persona['name']
-                    desc = persona['desc']
-                    others = [p['name'] for p in personas if p['name'] != role]
+                    for persona in personas:
+                        role = persona['name']
+                        desc = persona['desc']
+                        others = [p['name'] for p in personas if p['name'] != role]
 
-                    yield sse("thinking", speaker=role, round=round_num)
+                        yield sse("thinking", speaker=role, round=round_num)
+                        yield keepalive()
 
-                    if round_num == 1:
-                        system_prompt = (
-                            f"あなたは{role}です。{desc}\n"
-                            f"テーマ「{theme_name}」の議題「{item}」について、"
-                            f"あなた独自の立場・価値観からの主張を150文字程度で述べてください。"
-                            f"他の参加者とは全く異なる角度から発言してください。"
-                        )
-                        user_prompt = f"議題「{item}」についてあなたの立場から発言してください。"
-                    else:
-                        history_text = "\n".join(
-                            f"[R{e['round']} {e['speaker']}]: {e['response']}"
-                            for e in discussion_history
-                        )
-                        system_prompt = (
-                            f"あなたは{role}です。{desc}\n"
-                            f"第{round_num}ラウンドです。特に{', '.join(others[:2])}の発言に対して、"
-                            f"相手の名前を出しながら具体的に反論・同意・補足をしてください。"
-                            f"抽象論ではなく具体的な数字・事例・経験を引いて150文字程度で述べてください。"
-                        )
-                        user_prompt = f"これまでの議論:\n{history_text}\n\nあなたの発言:"
+                        if round_num == 1:
+                            system_prompt = (
+                                f"あなたは{role}です。{desc}\n"
+                                f"テーマ「{theme_name}」の議題「{item}」について、"
+                                f"あなた独自の立場・価値観からの主張を150文字程度で述べてください。"
+                                f"他の参加者とは全く異なる角度から発言してください。"
+                            )
+                            user_prompt = f"議題「{item}」についてあなたの立場から発言してください。"
+                        else:
+                            history_text = "\n".join(
+                                f"[R{e['round']} {e['speaker']}]: {e['response']}"
+                                for e in discussion_history
+                            )
+                            system_prompt = (
+                                f"あなたは{role}です。{desc}\n"
+                                f"第{round_num}ラウンドです。特に{', '.join(others[:2])}の発言に対して、"
+                                f"相手の名前を出しながら具体的に反論・同意・補足をしてください。"
+                                f"抽象論ではなく具体的な数字・事例・経験を引いて150文字程度で述べてください。"
+                            )
+                            user_prompt = f"これまでの議論:\n{history_text}\n\nあなたの発言:"
 
-                    response = ask_gemma(system_prompt, user_prompt, model=model)
-                    discussion_history.append({"round": round_num, "speaker": role, "response": response})
+                        response = ask_gemma(system_prompt, user_prompt, model=model)
+                        discussion_history.append({"round": round_num, "speaker": role, "response": response})
 
-                    if round_num != last_written_round:
-                        append(f"### Round {round_num}\n\n")
-                        last_written_round = round_num
-                    append(f"**{role}：** {response}\n\n")
+                        if round_num != last_written_round:
+                            append(f"### Round {round_num}\n\n")
+                            last_written_round = round_num
+                        append(f"**{role}：** {response}\n\n")
 
-                    yield sse("message", item=item, speaker=role, response=response, round=round_num)
+                        yield sse("message", item=item, speaker=role, response=response, round=round_num)
 
-            yield sse("summarizing", item=item)
-            history_text = "\n".join(
-                f"[R{e['round']} {e['speaker']}]: {e['response']}"
-                for e in discussion_history
+                yield sse("summarizing", item=item)
+                yield keepalive()
+                history_text = "\n".join(
+                    f"[R{e['round']} {e['speaker']}]: {e['response']}"
+                    for e in discussion_history
+                )
+                summary = ask_gemma(
+                    f"あなたは{mod_name}です。{mod_desc}\n"
+                    f"議論を整理し、合意点・対立点・次のアクションを簡潔にまとめてください。",
+                    f"議題「{item}」の議論:\n{history_text}\n\nまとめ:",
+                    model=model,
+                )
+                append(f"#### まとめ（{mod_name}）\n\n{summary}\n\n---\n\n")
+                yield sse("summary", item=item, summary=summary)
+                final_report.append(f"議題: {item}\n結果: {summary}")
+
+            yield sse("concluding")
+            yield keepalive()
+            full_prompt = (
+                "以下の各議題の議論結果を統合し、プロジェクトの最終意思決定案と優先アクションを作成してください:\n\n"
+                + "\n\n".join(final_report)
             )
-            summary = ask_gemma(
-                f"あなたは{mod_name}です。{mod_desc}\n"
-                f"議論を整理し、合意点・対立点・次のアクションを簡潔にまとめてください。",
-                f"議題「{item}」の議論:\n{history_text}\n\nまとめ:",
+            conclusion = ask_gemma(
+                f"あなたは{mod_name}です。{mod_desc}\n全議論を統合し、明確な意思決定と次のステップを示してください。",
+                full_prompt,
                 model=model,
             )
-            append(f"#### まとめ（{mod_name}）\n\n{summary}\n\n---\n\n")
-            yield sse("summary", item=item, summary=summary)
-            final_report.append(f"議題: {item}\n結果: {summary}")
+            append(f"## 最終結論（{mod_name}）\n\n{conclusion}\n")
+            yield sse("conclusion", text=conclusion)
 
-        yield sse("concluding")
-        full_prompt = (
-            "以下の各議題の議論結果を統合し、プロジェクトの最終意思決定案と優先アクションを作成してください:\n\n"
-            + "\n\n".join(final_report)
-        )
-        conclusion = ask_gemma(
-            f"あなたは{mod_name}です。{mod_desc}\n全議論を統合し、明確な意思決定と次のステップを示してください。",
-            full_prompt,
-            model=model,
-        )
-        append(f"## 最終結論（{mod_name}）\n\n{conclusion}\n")
-        yield sse("conclusion", text=conclusion)
+            yield keepalive()
+            summary_for_title = "\n".join(f"- {r}" for r in final_report)
+            raw_title = ask_gemma(
+                "あなたは優秀なライターです。議論の内容を端的に表す日本語タイトルを1行だけ出力してください。記号・引用符不要。",
+                f"テーマ「{theme_name}」の議論要約:\n{summary_for_title}\n\n結論:\n{conclusion}\n\nタイトル:",
+                model=model,
+            )
+            title = raw_title.strip().strip('#').strip('"').strip('「').strip('」').split('\n')[0].strip()
+            if not title:
+                title = theme_name
 
-        # タイトル生成してファイル名確定
-        summary_for_title = "\n".join(f"- {r}" for r in final_report)
-        raw_title = ask_gemma(
-            "あなたは優秀なライターです。議論の内容を端的に表す日本語タイトルを1行だけ出力してください。記号・引用符不要。",
-            f"テーマ「{theme_name}」の議論要約:\n{summary_for_title}\n\n結論:\n{conclusion}\n\nタイトル:",
-            model=model,
-        )
-        title = raw_title.strip().strip('#').strip('"').strip('「').strip('」').split('\n')[0].strip()
-        if not title:
-            title = theme_name
+            with open(draft_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            content = content.replace('# （議論中）', f'# {title}', 1)
 
-        with open(draft_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        content = content.replace('# （議論中）', f'# {title}', 1)
+            safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
+            final_filename = f"{timestamp}_{safe_title}.md"
+            final_path = os.path.join(reports_dir, final_filename)
+            with open(final_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            if os.path.exists(draft_path):
+                os.remove(draft_path)
 
-        safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
-        final_filename = f"{timestamp}_{safe_title}.md"
-        final_path = os.path.join(reports_dir, final_filename)
-        with open(final_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-        os.remove(draft_path)
+            yield sse("saved", filename=final_filename, filepath=final_path, title=title)
+            yield sse("done")
 
-        yield sse("saved", filename=final_filename, filepath=final_path, title=title)
-        yield sse("done")
+        except Exception as e:
+            # draft が残っていれば保持（途中まで保存済み）
+            yield sse("error", message=f"サーバーエラー: {e}　（途中まで {os.path.basename(draft_path)} に保存済み）")
 
     return Response(
         stream_with_context(generate()),
@@ -402,4 +418,5 @@ def run_discussion():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # use_reloader=False: 長時間SSE接続中にreloaderがサーバーを再起動してしまうのを防ぐ
+    app.run(debug=True, use_reloader=False, port=5000)

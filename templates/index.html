@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Evergreen 議論ダッシュボード</title>
+    <style>
+        /* (前回のCSSをここに追加またはコピーしてください) */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f9; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); }
+        h1 { color: #0056b3; border-bottom: 3px solid #0056b3; padding-bottom: 10px; margin-bottom: 30px; }
+        .agenda-section { margin-bottom: 40px; border: 1px solid #ddd; padding: 20px; border-radius: 8px; background-color: #f9f9f9; }
+        .agenda-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .agenda-header h2 { margin: 0; font-size: 1.5em; color: #2c3e50; }
+        .status-badge { padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 0.9em; }
+        .status-completed { background-color: #d4edda; color: #155724; }
+        .status-pending { background-color: #fff3cd; color: #856404; }
+        .history-log { margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
+        .history-item { border-left: 3px solid #007bff; padding: 10px; margin-bottom: 10px; background-color: #eaf5ff; font-size: 0.95em; }
+        .history-item strong { color: #0056b3; }
+        .loading { color: #007bff; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Project "Evergreen" 議論ダッシュボード</h1>
+        <p>バックエンドのAIエンジンが議論を実行し、その結果をここに表示します。</p>
+
+        <button id="runBtn" onclick="runDiscussion()" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">
+            議論エンジンを実行する
+        </button>
+
+        <!-- ここに議論結果が動的に挿入されます -->
+        <div id="results">
+            <p>「議論エンジンを実行する」ボタンを押すと、バックエンドのAI処理が開始されます。</p>
+        </div>
+
+    </div>
+
+    <script>
+        async function runDiscussion() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p class="loading">AIエンジンが議論を実行中です... 少々お待ちください。</p>';
+
+            try {
+                // ★ ここがバックエンド（app.py）へのAPIコールです
+                const response = await fetch('/run_discussion', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTPエラー: ${response.status}`);
+                }
+
+                const data = await response.json();
+                displayResults(data);
+
+            } catch (error) {
+                console.error('議論実行中にエラーが発生しました:', error);
+                resultsDiv.innerHTML = `<p style="color: red;">エラーが発生しました。サーバー（Python/Ollama）が起動しているか、Ollamaが起動しているか確認してください。<br>詳細: ${error.message}</p>`;
+            }
+        }
+
+        function displayResults(data) {
+            const resultsDiv = document.getElementById('results');
+            let html = '<h2>議論結果</h2>';
+
+            data.history.forEach(item => {
+                // 履歴を整形して表示
+                html += `<div class="history-item">
+                            <strong>【ステップ: ${item.step} - ${item.speaker}】</strong><br>
+                            <p><strong>応答:</strong> ${item.response.replace(/\n/g, '<br>')}</p>
+                        </div>`;
+            });
+
+            html += '<h2>中間まとめ</h2>';
+            for (const [agenda, summary] of Object.entries(data.summaries)) {
+                 html += `<div class="history-item" style="background-color: #e6f7ff;">
+                            <strong>【${agenda} 最終まとめ】</strong><br>
+                            ${summary}
+                        </div>`;
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

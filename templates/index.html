@@ -9,39 +9,47 @@
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; margin: 0; padding: 20px; }
         .container { max-width: 960px; margin: 0 auto; }
 
-        /* Config panel */
-        .config-panel { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .panel { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
         h1 { margin: 0 0 20px; color: #0056b3; font-size: 1.4em; border-bottom: 3px solid #0056b3; padding-bottom: 10px; }
-        .section-label { font-weight: bold; color: #444; margin-bottom: 10px; display: block; }
+        .section-label { font-weight: bold; color: #444; margin-bottom: 10px; display: block; font-size: 0.95em; }
 
-        /* Preset theme cards */
+        /* Preset cards */
         .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px; }
         .preset-card { border: 2px solid #dde; border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.15s; background: #fafafa; }
         .preset-card:hover { border-color: #007bff; background: #f0f7ff; }
         .preset-card.selected { border-color: #0056b3; background: #e8f0fe; }
-        .preset-card .card-name { font-weight: bold; font-size: 0.95em; color: #0056b3; margin-bottom: 4px; }
-        .preset-card .card-desc { font-size: 0.8em; color: #666; }
+        .preset-card .card-name { font-weight: bold; font-size: 0.9em; color: #0056b3; margin-bottom: 4px; }
+        .preset-card .card-desc { font-size: 0.78em; color: #666; }
 
         /* Custom input */
-        .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #aaa; font-size: 0.9em; }
+        .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #aaa; font-size: 0.88em; }
         .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #ddd; }
         .custom-row { display: flex; gap: 10px; }
         .custom-row input { flex: 1; padding: 9px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.95em; }
         .custom-row input:focus { outline: none; border-color: #007bff; box-shadow: 0 0 0 2px rgba(0,123,255,0.15); }
-        .gen-btn { padding: 9px 16px; background: #6c757d; color: #fff; border: none; border-radius: 6px; cursor: pointer; white-space: nowrap; font-size: 0.95em; }
+        .gen-btn { padding: 9px 16px; background: #6c757d; color: #fff; border: none; border-radius: 6px; cursor: pointer; white-space: nowrap; font-size: 0.9em; }
         .gen-btn:hover:not(:disabled) { background: #5a6268; }
-        .gen-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .gen-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
-        /* Agenda checks */
+        /* Agenda */
         .agenda-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; }
-        .agenda-checks { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
-        .agenda-checks label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.92em; padding: 5px 8px; border-radius: 5px; transition: background 0.1s; }
+        .agenda-checks { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+        .agenda-checks label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em; padding: 5px 8px; border-radius: 5px; transition: background 0.1s; }
         .agenda-checks label:hover { background: #f5f5f5; }
-        .agenda-checks input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+
+        /* Personas */
+        .persona-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; }
+        .persona-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 8px; }
+        .persona-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; background: #fafafa; }
+        .persona-card .p-name { font-weight: bold; color: #333; font-size: 0.92em; margin-bottom: 4px; }
+        .persona-card .p-desc { font-size: 0.78em; color: #666; line-height: 1.5; }
+        .moderator-card { border-color: #4caf50; background: #f1f8e9; }
+        .moderator-card .p-name { color: #2e7d32; }
+        .moderator-label { font-size: 0.72em; font-weight: bold; color: #4caf50; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
 
         /* Rounds */
         .rounds-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
-        .rounds-row label { font-weight: bold; color: #444; white-space: nowrap; }
+        .rounds-row label { font-weight: bold; color: #444; white-space: nowrap; font-size: 0.95em; }
         .rounds-row input[type=range] { flex: 1; }
         .rounds-val { font-weight: bold; color: #0056b3; min-width: 2em; text-align: center; font-size: 1.1em; }
 
@@ -59,13 +67,13 @@
         /* Results */
         .agenda-block { background: #fff; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
         .agenda-title { background: linear-gradient(135deg, #0056b3, #007bff); color: #fff; padding: 12px 18px; font-weight: bold; font-size: 1.05em; }
-        .round-header { padding: 5px 18px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: 0.78em; font-weight: bold; color: #888; letter-spacing: 0.08em; text-transform: uppercase; }
+        .round-header { padding: 5px 18px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: 0.75em; font-weight: bold; color: #888; letter-spacing: 0.08em; text-transform: uppercase; }
         .message { display: flex; gap: 12px; padding: 10px 18px; border-bottom: 1px solid #f2f2f2; animation: fadein 0.25s ease; }
-        .speaker-tag { font-weight: bold; min-width: 140px; color: #0056b3; flex-shrink: 0; font-size: 0.88em; padding-top: 3px; }
+        .speaker-tag { font-weight: bold; min-width: 140px; color: #0056b3; flex-shrink: 0; font-size: 0.85em; padding-top: 3px; }
         .bubble { line-height: 1.65; flex: 1; font-size: 0.93em; }
-        .thinking-row { padding: 8px 18px; color: #aaa; font-style: italic; font-size: 0.88em; animation: pulse 1.2s infinite; }
-        .summary-block { margin: 12px 18px 16px; background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px 14px; border-radius: 4px; font-size: 0.93em; line-height: 1.6; }
-        .summary-block strong { color: #2e7d32; display: block; margin-bottom: 4px; font-size: 0.9em; }
+        .thinking-row { padding: 8px 18px; color: #aaa; font-style: italic; font-size: 0.85em; animation: pulse 1.2s infinite; }
+        .summary-block { margin: 12px 18px 16px; background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px 14px; border-radius: 4px; font-size: 0.92em; line-height: 1.65; }
+        .summary-block .sum-label { color: #2e7d32; font-weight: bold; font-size: 0.85em; display: block; margin-bottom: 4px; }
         .conclusion-block { background: #fff; border: 2px solid #ff9800; border-radius: 10px; padding: 20px; margin-top: 24px; box-shadow: 0 2px 12px rgba(255,152,0,0.15); animation: fadein 0.4s ease; }
         .conclusion-block h2 { margin-top: 0; color: #e65100; }
         .error { color: #c0392b; background: #fdf0ef; border: 1px solid #e74c3c; border-radius: 6px; padding: 12px 16px; margin-top: 12px; }
@@ -78,7 +86,7 @@
 <script type="application/json" id="presets-data">{{ presets | tojson }}</script>
 
 <div class="container">
-    <div class="config-panel">
+    <div class="panel">
         <h1>Evergreen 議論ダッシュボード</h1>
 
         <span class="section-label">おすすめテーマ</span>
@@ -87,12 +95,17 @@
         <div class="divider">または自由入力</div>
         <div class="custom-row">
             <input type="text" id="customTheme" placeholder="議論テーマを入力（例: 新規事業立ち上げ戦略）" oninput="onCustomInput()">
-            <button class="gen-btn" id="genBtn" onclick="generateAgenda()" disabled>議題を生成</button>
+            <button class="gen-btn" id="genBtn" onclick="runSetup()" disabled>AIで設定を生成</button>
         </div>
 
         <div class="agenda-section" id="agendaSection" style="display:none">
             <span class="section-label">議題（チェックで選択）</span>
             <div class="agenda-checks" id="agendaChecks"></div>
+        </div>
+
+        <div class="persona-section" id="personaSection" style="display:none">
+            <span class="section-label">論客</span>
+            <div class="persona-grid" id="personaGrid"></div>
         </div>
 
         <div class="rounds-row">
@@ -114,21 +127,20 @@
 
 <script>
     const PRESETS = JSON.parse(document.getElementById('presets-data').textContent);
+    let currentPersonas = [];
+    let currentModerator = {};
     let selectedThemeName = '';
-    let selectedAgenda = [];
     let currentAgendaMsgsEl = null;
     let lastRound = null;
     let totalRounds = 10;
 
-    // --- Build preset cards ---
-    const grid = document.getElementById('presetGrid');
-    PRESETS.forEach((p, i) => {
+    // Build preset cards
+    PRESETS.forEach(p => {
         const card = document.createElement('div');
         card.className = 'preset-card';
-        card.dataset.key = p.key;
         card.innerHTML = `<div class="card-name">${p.name}</div><div class="card-desc">${p.desc}</div>`;
         card.onclick = () => selectPreset(p, card);
-        grid.appendChild(card);
+        document.getElementById('presetGrid').appendChild(card);
     });
 
     function selectPreset(preset, cardEl) {
@@ -137,7 +149,10 @@
         document.getElementById('customTheme').value = '';
         document.getElementById('genBtn').disabled = true;
         selectedThemeName = preset.name;
+        currentPersonas = preset.personas;
+        currentModerator = preset.moderator;
         showAgenda(preset.agenda);
+        showPersonas(preset.personas, preset.moderator);
     }
 
     function onCustomInput() {
@@ -146,49 +161,69 @@
         document.getElementById('genBtn').disabled = !val;
         if (!val) {
             selectedThemeName = '';
-            selectedAgenda = [];
+            currentPersonas = [];
+            currentModerator = {};
             document.getElementById('agendaSection').style.display = 'none';
+            document.getElementById('personaSection').style.display = 'none';
             document.getElementById('runBtn').disabled = true;
         }
     }
 
-    async function generateAgenda() {
+    async function runSetup() {
         const theme = document.getElementById('customTheme').value.trim();
         if (!theme) return;
         const genBtn = document.getElementById('genBtn');
         genBtn.disabled = true;
         genBtn.textContent = '生成中…';
-        setStatus('AIが議題を生成中…', true);
+        setStatus('AIが議題とペルソナを生成中…', true);
 
         try {
-            const res = await fetch(`/generate_agenda?theme=${encodeURIComponent(theme)}`);
+            const res = await fetch(`/setup?theme=${encodeURIComponent(theme)}`);
             const data = await res.json();
-            if (data.agenda && data.agenda.length) {
+            if (data.agenda?.length && data.personas?.length) {
                 selectedThemeName = theme;
+                currentPersonas = data.personas;
+                currentModerator = data.moderator || { name: 'モデレーター', desc: '中立的なファシリテーター' };
                 showAgenda(data.agenda);
-                setStatus('議題を生成しました。', false);
+                showPersonas(data.personas, currentModerator);
+                setStatus('設定を生成しました。', false);
             } else {
-                setStatus('議題の生成に失敗しました。', false);
+                setStatus('生成に失敗しました。再度お試しください。', false);
             }
         } catch (e) {
             setStatus('エラー: サーバーに接続できません。', false);
         }
         genBtn.disabled = false;
-        genBtn.textContent = '議題を生成';
+        genBtn.textContent = 'AIで設定を生成';
     }
 
     function showAgenda(items) {
         const container = document.getElementById('agendaChecks');
-        container.innerHTML = items.map((item, i) =>
-            `<label><input type="checkbox" value="${escapeHtml(item)}" checked> ${escapeHtml(item)}</label>`
+        container.innerHTML = items.map(item =>
+            `<label><input type="checkbox" value="${esc(item)}" checked> ${esc(item)}</label>`
         ).join('');
         document.getElementById('agendaSection').style.display = 'block';
         document.getElementById('runBtn').disabled = false;
-        selectedAgenda = items;
     }
 
-    function escapeHtml(s) {
-        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    function showPersonas(personas, moderator) {
+        const grid = document.getElementById('personaGrid');
+        grid.innerHTML = personas.map(p =>
+            `<div class="persona-card">
+                <div class="p-name">${esc(p.name)}</div>
+                <div class="p-desc">${esc(p.desc)}</div>
+            </div>`
+        ).join('') + `
+            <div class="persona-card moderator-card">
+                <div class="moderator-label">まとめ役</div>
+                <div class="p-name">${esc(moderator.name)}</div>
+                <div class="p-desc">${esc(moderator.desc)}</div>
+            </div>`;
+        document.getElementById('personaSection').style.display = 'block';
+    }
+
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
     function setStatus(msg, spinning) {
@@ -196,15 +231,15 @@
         document.getElementById('spinner').classList.toggle('active', !!spinning);
     }
 
-    // --- Run discussion ---
+    // Results rendering
     function getOrCreateAgendaBlock(item) {
-        const id = 'ag-' + btoa(encodeURIComponent(item)).replace(/[^a-z0-9]/gi, '').slice(0, 20);
+        const id = 'ag-' + btoa(encodeURIComponent(item)).replace(/[^a-z0-9]/gi,'').slice(0,20);
         let el = document.getElementById(id);
         if (!el) {
             el = document.createElement('div');
             el.className = 'agenda-block';
             el.id = id;
-            el.innerHTML = `<div class="agenda-title">${escapeHtml(item)}</div><div class="msgs" id="${id}-msgs"></div>`;
+            el.innerHTML = `<div class="agenda-title">${esc(item)}</div><div class="msgs" id="${id}-msgs"></div>`;
             document.getElementById('results').appendChild(el);
         }
         currentAgendaMsgsEl = document.getElementById(id + '-msgs');
@@ -221,16 +256,14 @@
         container.appendChild(div);
     }
 
-    function removeThinking(container) {
-        container.querySelector('.thinking-row')?.remove();
-    }
+    function removeThinking(container) { container.querySelector('.thinking-row')?.remove(); }
 
     function appendMessage(container, speaker, response, round) {
         ensureRoundHeader(container, round);
         removeThinking(container);
         const div = document.createElement('div');
         div.className = 'message';
-        div.innerHTML = `<span class="speaker-tag">${escapeHtml(speaker)}</span><span class="bubble">${response.replace(/\n/g, '<br>')}</span>`;
+        div.innerHTML = `<span class="speaker-tag">${esc(speaker)}</span><span class="bubble">${response.replace(/\n/g,'<br>')}</span>`;
         container.appendChild(div);
         div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -244,21 +277,21 @@
         div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    function appendSummary(container, summary) {
+    function appendSummary(container, moderatorName, summary) {
         removeThinking(container);
         const div = document.createElement('div');
         div.className = 'summary-block';
-        div.innerHTML = `<strong>まとめ</strong>${summary.replace(/\n/g, '<br>')}`;
+        div.innerHTML = `<span class="sum-label">${esc(moderatorName)} まとめ</span>${summary.replace(/\n/g,'<br>')}`;
         container.appendChild(div);
     }
 
     async function runDiscussion() {
         const checkedItems = [...document.querySelectorAll('#agendaChecks input:checked')].map(c => c.value);
         if (!checkedItems.length) { alert('議題を1つ以上選択してください。'); return; }
+        if (!currentPersonas.length) { alert('ペルソナが設定されていません。'); return; }
 
         const rounds = parseInt(document.getElementById('roundsRange').value);
         totalRounds = rounds;
-
         document.getElementById('runBtn').disabled = true;
         document.getElementById('results').innerHTML = '';
         currentAgendaMsgsEl = null;
@@ -266,13 +299,16 @@
         const params = new URLSearchParams({
             theme_name: selectedThemeName,
             agenda: JSON.stringify(checkedItems),
-            rounds: rounds,
+            personas: JSON.stringify(currentPersonas),
+            moderator: JSON.stringify(currentModerator),
+            rounds,
         });
 
         const es = new EventSource(`/run_discussion?${params}`);
 
         es.onmessage = (e) => {
             const data = JSON.parse(e.data);
+            const modName = currentModerator.name || 'モデレーター';
             switch (data.type) {
                 case 'agenda_start':
                     setStatus(`議題 ${data.index}/${data.total}：${data.item}`, true);
@@ -289,24 +325,24 @@
                     if (currentAgendaMsgsEl) appendMessage(currentAgendaMsgsEl, data.speaker, data.response, data.round);
                     break;
                 case 'summarizing':
-                    setStatus('モデレーターがまとめを作成中…', true);
+                    setStatus(`${modName} がまとめを作成中…`, true);
                     if (currentAgendaMsgsEl) {
                         const d = document.createElement('div');
                         d.className = 'thinking-row';
-                        d.textContent = 'モデレーター がまとめ中…';
+                        d.textContent = `${modName} がまとめ中…`;
                         currentAgendaMsgsEl.appendChild(d);
                     }
                     break;
                 case 'summary':
-                    if (currentAgendaMsgsEl) appendSummary(currentAgendaMsgsEl, data.summary);
+                    if (currentAgendaMsgsEl) appendSummary(currentAgendaMsgsEl, modName, data.summary);
                     break;
                 case 'concluding':
-                    setStatus('CEO が最終結論を起草中…', true);
+                    setStatus(`${modName} が最終結論を起草中…`, true);
                     break;
                 case 'conclusion': {
                     const div = document.createElement('div');
                     div.className = 'conclusion-block';
-                    div.innerHTML = `<h2>総合まとめ（CEO）</h2><p>${data.text.replace(/\n/g, '<br>')}</p>`;
+                    div.innerHTML = `<h2>総合まとめ（${esc(modName)}）</h2><p>${data.text.replace(/\n/g,'<br>')}</p>`;
                     document.getElementById('results').appendChild(div);
                     div.scrollIntoView({ behavior: 'smooth' });
                     break;

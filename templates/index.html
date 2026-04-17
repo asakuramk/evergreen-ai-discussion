@@ -84,6 +84,13 @@
                         </div>`;
             }
 
+            if (data.conclusion) {
+                html += `<h2>総合まとめ（CEO）</h2>
+                        <div class="history-item" style="background-color: #fff3e0; border-left-color: #ff9800;">
+                            ${data.conclusion.replace(/\n/g, '<br>')}
+                        </div>`;
+            }
+
             resultsDiv.innerHTML = html;
         }
     </script>

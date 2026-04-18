@@ -1,6 +1,10 @@
 import json
 import os
 import re
+import subprocess
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from flask import Flask, render_template, Response, stream_with_context, request, jsonify
 import requests
@@ -10,136 +14,93 @@ app = Flask(__name__)
 OLLAMA_BASE = "http://localhost:11434"
 OLLAMA_URL  = f"{OLLAMA_BASE}/api/chat"
 
-PRESET_THEMES = [
-    {
-        "key": "evergreen",
-        "name": "Project Evergreen",
-        "desc": "24時間稼働AIシステムの立ち上げ",
-        "agenda": [
-            "プロジェクトのビジョンと目的",
-            "アーキテクチャと技術的実現性",
-            "開発フェーズとタイムライン",
-            "コスト構造とROI予測",
-            "リスク管理とガバナンス",
-        ],
-        "personas": [
-            {"name": "AI研究者",       "desc": "技術的限界と学術知見から、AIの現実的な能力と将来性を客観的に評価する"},
-            {"name": "現場オペレーター", "desc": "24時間稼働の運用現実を知り尽くし、人間が担うべき役割の重要性を強く訴える"},
-            {"name": "消費者権利活動家", "desc": "ユーザーのプライバシー・安全・同意を最優先に考え、企業論理に対峙する"},
-            {"name": "競合アナリスト",  "desc": "市場競争・差別化・ビジネスモデルの持続可能性を冷徹に分析する"},
-        ],
-        "moderator": {"name": "テクノロジー政策研究者", "desc": "技術と社会の接点を研究し、多角的な議論を整理する中立的ファシリテーター"},
-    },
-    {
-        "key": "ai_ethics",
-        "name": "AI倫理と規制",
-        "desc": "AI導入における倫理・法規制の整備",
-        "agenda": [
-            "AIの意思決定の透明性",
-            "プライバシーとデータ保護",
-            "AI規制の国際標準化",
-            "自律型AIのガバナンス",
-            "AIと雇用の未来",
-        ],
-        "personas": [
-            {"name": "哲学者・倫理学者",       "desc": "人間の尊厳・自由意志・価値観の根本から問い直し、技術決定論に警鐘を鳴らす"},
-            {"name": "AIスタートアップCEO",     "desc": "イノベーションの自由を守る立場から、過剰規制がもたらす競争力低下を訴える"},
-            {"name": "社会福祉士",             "desc": "AIの恩恵と弊害を社会的弱者・マイノリティの視点で捉え、格差拡大を危惧する"},
-            {"name": "国際政策アナリスト",      "desc": "地政学的競争・国際標準・外交上の影響を分析し、国益の観点で規制を論じる"},
-        ],
-        "moderator": {"name": "国連AI倫理委員会アドバイザー", "desc": "各国の立場と利害を超えて議論を整理する国際的な中立ファシリテーター"},
-    },
-    {
-        "key": "remote_work",
-        "name": "リモートワーク戦略",
-        "desc": "フルリモート移行の是非と施策",
-        "agenda": [
-            "生産性と管理の課題",
-            "チームコミュニケーション",
-            "オフィス縮小とコスト削減",
-            "採用・人材確保への影響",
-            "セキュリティとコンプライアンス",
-        ],
-        "personas": [
-            {"name": "組織心理学者",       "desc": "孤独感・メンタルヘルス・チーム結束力を科学的エビデンスで分析する"},
-            {"name": "不動産投資家",       "desc": "オフィス市場の崩壊・都市経済・資産価値への影響を数字で語る"},
-            {"name": "子育て中の社員代表", "desc": "通勤ゼロの恩恵と自宅での集中困難、キャリア停滞の不安を生々しく語る"},
-            {"name": "サイバーセキュリティ専門家", "desc": "リモート環境のVPN・エンドポイントリスクと現実的な対策コストを主張する"},
-        ],
-        "moderator": {"name": "働き方改革コンサルタント", "desc": "多様な立場の主張を実務的観点で整理し、組織変革への示唆を導くファシリテーター"},
-    },
-    {
-        "key": "carbon_neutral",
-        "name": "カーボンニュートラル",
-        "desc": "2030年CO₂排出ゼロへの道筋",
-        "agenda": [
-            "現状の炭素排出量と削減目標",
-            "再生可能エネルギーへの移行",
-            "サプライチェーンの脱炭素化",
-            "コストと投資回収",
-            "社会・規制上のリスク",
-        ],
-        "personas": [
-            {"name": "気候科学者",         "desc": "IPCCデータと気温上昇シナリオを根拠に、行動の緊急性を科学的に訴える"},
-            {"name": "製造業の現場監督",   "desc": "脱炭素化コストと製造ラインへの実際的な打撃を、現場の声として伝える"},
-            {"name": "グリーンテック投資家", "desc": "再エネ市場の爆発的成長機会とESGリターンの観点から移行を強く推進する"},
-            {"name": "途上国支援NGO代表",  "desc": "先進国の脱炭素政策が途上国に与える不平等な負担と南北格差を告発する"},
-        ],
-        "moderator": {"name": "環境省政策立案者", "desc": "科学・経済・外交の三者を調停しながら実行可能な政策に落とし込むファシリテーター"},
-    },
-    {
-        "key": "global_expansion",
-        "name": "海外展開戦略",
-        "desc": "東南アジア・欧米市場への進出計画",
-        "agenda": [
-            "ターゲット市場の選定",
-            "現地化とプロダクト適応",
-            "法規制・コンプライアンス",
-            "組織体制と採用",
-            "財務計画とリスク",
-        ],
-        "personas": [
-            {"name": "現地文化研究者",  "desc": "文化的誤解・ローカライズの失敗事例を引き合いに、表面的な現地化の危険を警告する"},
-            {"name": "帰国子女エンジニア", "desc": "現地と本社のギャップ・技術スタックの現実・採用市場の厳しさを両者の目線で語る"},
-            {"name": "国際法律家",      "desc": "現地の知的財産権・労働法・データ規制の複雑さと違反リスクを具体的に警告する"},
-            {"name": "M&A専門家",       "desc": "有機的成長 vs 買収戦略の優劣・Exit設計・株主価値の最大化を財務的に論じる"},
-        ],
-        "moderator": {"name": "グローバルビジネス戦略顧問", "desc": "各国進出の成功・失敗事例を踏まえ、議論を実行可能な戦略に絞り込むファシリテーター"},
-    },
-]
+KEEP_RECENT_ROUNDS = 2
+
+_ollama_lock = threading.Lock()
 
 
-def ask_gemma(system_prompt, user_prompt, model=None):
+def ensure_ollama():
+    """Ollamaが落ちていたら再起動して復旧を待つ。"""
+    try:
+        requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3).raise_for_status()
+        return
+    except Exception:
+        pass
+
+    with _ollama_lock:
+        try:
+            requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3).raise_for_status()
+            return
+        except Exception:
+            pass
+
+        print("[ollama] restarting...", flush=True)
+        subprocess.run("lsof -ti :11434 | xargs kill -9", shell=True, capture_output=True)
+        time.sleep(2)
+        subprocess.Popen(
+            ["ollama", "serve"],
+            env={**os.environ,
+                 "OLLAMA_NUM_PARALLEL": "4",
+                 "OLLAMA_NUM_THREAD": "8",
+                 "OLLAMA_HOST": "0.0.0.0:11434"},
+            stdout=open("/tmp/ollama_11434.log", "w"),
+            stderr=subprocess.STDOUT,
+        )
+        for _ in range(40):
+            time.sleep(1)
+            try:
+                requests.get(f"{OLLAMA_BASE}/api/tags", timeout=3).raise_for_status()
+                print("[ollama] restarted OK", flush=True)
+                return
+            except Exception:
+                pass
+        raise RuntimeError("Ollama の再起動に失敗しました")
+
+
+def ask(system_prompt, user_prompt, model):
+    """Ollama にリクエストして応答テキストを返す。失敗時は最大3回リトライ。"""
     payload = {
-        "model": model or "gemma4:e2b",
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "user",   "content": user_prompt},
         ],
         "stream": False,
     }
-    try:
-        r = requests.post(OLLAMA_URL, json=payload, timeout=600)
-        r.raise_for_status()
-        return r.json()['message']['content']
-    except Exception as e:
-        return f"（応答なし: {e}）"
+    last_err = None
+    for attempt in range(3):
+        try:
+            r = requests.post(OLLAMA_URL, json=payload, timeout=600)
+            r.raise_for_status()
+            text = r.json()["message"]["content"]
+            if text:
+                return text
+            # 空レスポンス → モデル問題としてリトライしない
+            return "（応答なし）"
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                print(f"[ollama] attempt {attempt+1} failed: {e}", flush=True)
+                try:
+                    ensure_ollama()
+                except Exception:
+                    pass
+                time.sleep(2)
+    return f"（応答なし: {last_err}）"
 
 
 def parse_list(text, key=None):
-    """Extract a JSON array (optionally under a key) or fall back to line parsing."""
     if key:
-        # Try {"key": [...]}
-        match = re.search(rf'"{key}"\s*:\s*(\[.*?\])', text, re.DOTALL)
-        if match:
+        m = re.search(rf'"{key}"\s*:\s*(\[.*?\])', text, re.DOTALL)
+        if m:
             try:
-                return json.loads(match.group(1))
+                return json.loads(m.group(1))
             except Exception:
                 pass
-    match = re.search(r'\[.*?\]', text, re.DOTALL)
-    if match:
+    m = re.search(r'\[.*?\]', text, re.DOTALL)
+    if m:
         try:
-            result = json.loads(match.group())
+            result = json.loads(m.group())
             if isinstance(result, list):
                 return result
         except Exception:
@@ -172,6 +133,104 @@ def sse(event_type, **kwargs):
     return f"data: {data}\n\n"
 
 
+def build_context(rolling_summary, recent_rounds):
+    parts = []
+    if rolling_summary:
+        parts.append(f"【これまでの議論の要点】\n{rolling_summary}")
+    if recent_rounds:
+        lines = [
+            f"[R{rd['round']} {m['speaker']}]: {m['response']}"
+            for rd in recent_rounds for m in rd["messages"]
+        ]
+        parts.append("【直近の議論】\n" + "\n".join(lines))
+    return "\n\n".join(parts)
+
+
+def compress_round(existing_summary, old_round, model):
+    round_text = "\n".join(f"{m['speaker']}: {m['response']}" for m in old_round["messages"])
+    if existing_summary:
+        system = "議論の要約を更新してください。各論客の立場・主張の変化・対立軸を保持し200文字以内で。"
+        user = f"【現在の要約】\n{existing_summary}\n\n【Round {old_round['round']}の発言】\n{round_text}\n\n更新後の要約:"
+    else:
+        system = "以下の議論の要点を各論客の立場・主張を中心に200文字以内でまとめてください。"
+        user = f"Round {old_round['round']}の発言:\n{round_text}\n\n要約:"
+    return ask(system, user, model)
+
+
+PRESET_THEMES = [
+    {
+        "key": "evergreen",
+        "name": "Project Evergreen",
+        "desc": "24時間稼働AIシステムの立ち上げ",
+        "agenda": ["プロジェクトのビジョンと目的", "アーキテクチャと技術的実現性",
+                   "開発フェーズとタイムライン", "コスト構造とROI予測", "リスク管理とガバナンス"],
+        "personas": [
+            {"name": "AI研究者",       "desc": "技術的限界と学術知見から、AIの現実的な能力と将来性を客観的に評価する"},
+            {"name": "現場オペレーター", "desc": "24時間稼働の運用現実を知り尽くし、人間が担うべき役割の重要性を強く訴える"},
+            {"name": "消費者権利活動家", "desc": "ユーザーのプライバシー・安全・同意を最優先に考え、企業論理に対峙する"},
+            {"name": "競合アナリスト",  "desc": "市場競争・差別化・ビジネスモデルの持続可能性を冷徹に分析する"},
+        ],
+        "moderator": {"name": "テクノロジー政策研究者", "desc": "技術と社会の接点を研究し、多角的な議論を整理する中立的ファシリテーター"},
+    },
+    {
+        "key": "ai_ethics",
+        "name": "AI倫理と規制",
+        "desc": "AI導入における倫理・法規制の整備",
+        "agenda": ["AIの意思決定の透明性", "プライバシーとデータ保護",
+                   "AI規制の国際標準化", "自律型AIのガバナンス", "AIと雇用の未来"],
+        "personas": [
+            {"name": "哲学者・倫理学者",   "desc": "人間の尊厳・自由意志・価値観の根本から問い直し、技術決定論に警鐘を鳴らす"},
+            {"name": "AIスタートアップCEO", "desc": "イノベーションの自由を守る立場から、過剰規制がもたらす競争力低下を訴える"},
+            {"name": "社会福祉士",         "desc": "AIの恩恵と弊害を社会的弱者・マイノリティの視点で捉え、格差拡大を危惧する"},
+            {"name": "国際政策アナリスト",  "desc": "地政学的競争・国際標準・外交上の影響を分析し、国益の観点で規制を論じる"},
+        ],
+        "moderator": {"name": "国連AI倫理委員会アドバイザー", "desc": "各国の立場と利害を超えて議論を整理する国際的な中立ファシリテーター"},
+    },
+    {
+        "key": "remote_work",
+        "name": "リモートワーク戦略",
+        "desc": "フルリモート移行の是非と施策",
+        "agenda": ["生産性と管理の課題", "チームコミュニケーション",
+                   "オフィス縮小とコスト削減", "採用・人材確保への影響", "セキュリティとコンプライアンス"],
+        "personas": [
+            {"name": "組織心理学者",          "desc": "孤独感・メンタルヘルス・チーム結束力を科学的エビデンスで分析する"},
+            {"name": "不動産投資家",          "desc": "オフィス市場の崩壊・都市経済・資産価値への影響を数字で語る"},
+            {"name": "子育て中の社員代表",    "desc": "通勤ゼロの恩恵と自宅での集中困難、キャリア停滞の不安を生々しく語る"},
+            {"name": "サイバーセキュリティ専門家", "desc": "リモート環境のVPN・エンドポイントリスクと現実的な対策コストを主張する"},
+        ],
+        "moderator": {"name": "働き方改革コンサルタント", "desc": "多様な立場の主張を実務的観点で整理し、組織変革への示唆を導くファシリテーター"},
+    },
+    {
+        "key": "carbon_neutral",
+        "name": "カーボンニュートラル",
+        "desc": "2030年CO₂排出ゼロへの道筋",
+        "agenda": ["現状の炭素排出量と削減目標", "再生可能エネルギーへの移行",
+                   "サプライチェーンの脱炭素化", "コストと投資回収", "社会・規制上のリスク"],
+        "personas": [
+            {"name": "気候科学者",         "desc": "IPCCデータと気温上昇シナリオを根拠に、行動の緊急性を科学的に訴える"},
+            {"name": "製造業の現場監督",   "desc": "脱炭素化コストと製造ラインへの実際的な打撃を、現場の声として伝える"},
+            {"name": "グリーンテック投資家", "desc": "再エネ市場の爆発的成長機会とESGリターンの観点から移行を強く推進する"},
+            {"name": "途上国支援NGO代表",  "desc": "先進国の脱炭素政策が途上国に与える不平等な負担と南北格差を告発する"},
+        ],
+        "moderator": {"name": "環境省政策立案者", "desc": "科学・経済・外交の三者を調停しながら実行可能な政策に落とし込むファシリテーター"},
+    },
+    {
+        "key": "global_expansion",
+        "name": "海外展開戦略",
+        "desc": "東南アジア・欧米市場への進出計画",
+        "agenda": ["ターゲット市場の選定", "現地化とプロダクト適応",
+                   "法規制・コンプライアンス", "組織体制と採用", "財務計画とリスク"],
+        "personas": [
+            {"name": "現地文化研究者",     "desc": "文化的誤解・ローカライズの失敗事例を引き合いに、表面的な現地化の危険を警告する"},
+            {"name": "帰国子女エンジニア", "desc": "現地と本社のギャップ・技術スタックの現実・採用市場の厳しさを両者の目線で語る"},
+            {"name": "国際法律家",         "desc": "現地の知的財産権・労働法・データ規制の複雑さと違反リスクを具体的に警告する"},
+            {"name": "M&A専門家",          "desc": "有機的成長 vs 買収戦略の優劣・Exit設計・株主価値の最大化を財務的に論じる"},
+        ],
+        "moderator": {"name": "グローバルビジネス戦略顧問", "desc": "各国進出の成功・失敗事例を踏まえ、議論を実行可能な戦略に絞り込むファシリテーター"},
+    },
+]
+
+
 @app.route('/models')
 def list_models():
     try:
@@ -190,51 +249,48 @@ def index():
 
 @app.route('/setup')
 def setup():
-    """Generate agenda + 4 personas + moderator for a custom theme."""
     theme = request.args.get('theme', '').strip()
-    model = request.args.get('model', '').strip() or None
+    model = request.args.get('model', '').strip() or 'gemma4-fast'
     if not theme:
         return jsonify({"error": "theme is required"}), 400
 
-    agenda_raw = ask_gemma(
+    agenda_raw = ask(
         "あなたは企業の議論ファシリテーターです。",
         f'テーマ「{theme}」について経営会議で議論すべき重要な議題を5つ生成してください。'
         f'各議題は15〜25文字の簡潔な名詞句で。必ずJSON配列で返してください: ["議題1","議題2","議題3","議題4","議題5"]',
-        model=model,
+        model,
     )
     agenda = [str(i).strip() for i in (parse_list(agenda_raw) or []) if str(i).strip()]
     if not agenda:
         agenda = [f"{theme}の現状分析", f"{theme}の課題整理", f"{theme}の実行計画",
                   f"{theme}のコストと効果", f"{theme}のリスクと対策"]
 
-    personas_raw = ask_gemma(
+    personas_raw = ask(
         "あなたは議論設計の専門家です。",
-        f'テーマ「{theme}」について、全く異なる4つの立場・角度から議論できる論客を設定してください。'
-        f'職業・価値観・利害関係がそれぞれ正反対になるよう工夫してください。'
-        f'必ずJSON配列で返してください（日本語で）:\n'
-        f'[{{"name":"役職や肩書き","desc":"この人物の視点・価値観・議論スタンス（40〜60文字）"}},'
+        f'テーマ「{theme}」について、全く異なる4つの立場から議論できる論客を設定してください。'
+        f'必ずJSON配列で返してください:\n'
+        f'[{{"name":"役職や肩書き","desc":"この人物の視点・議論スタンス（40〜60文字）"}},'
         f' {{"name":"...","desc":"..."}},'
         f' {{"name":"...","desc":"..."}},'
         f' {{"name":"...","desc":"..."}}]',
-        model=model,
+        model,
     )
     personas = parse_personas(personas_raw)
     if len(personas) < 4:
         fallbacks = [
-            {"name": "推進派リーダー",   "desc": f"{theme}を積極推進する立場。メリットと可能性を強調する"},
-            {"name": "懐疑的専門家",     "desc": f"{theme}のリスクと課題を客観的データで指摘する"},
-            {"name": "現場の実務者",     "desc": f"{theme}の現場実態を語り、理想論と現実のギャップを訴える"},
+            {"name": "推進派リーダー",    "desc": f"{theme}を積極推進する立場。メリットと可能性を強調する"},
+            {"name": "懐疑的専門家",      "desc": f"{theme}のリスクと課題を客観的データで指摘する"},
+            {"name": "現場の実務者",      "desc": f"{theme}の現場実態を語り、理想論と現実のギャップを訴える"},
             {"name": "社会的影響の代弁者", "desc": f"{theme}が社会・コミュニティに与える影響を当事者視点で語る"},
         ]
         for fb in fallbacks[len(personas):4]:
             personas.append(fb)
 
-    moderator_raw = ask_gemma(
+    moderator_raw = ask(
         "あなたは議論設計の専門家です。",
         f'テーマ「{theme}」の議論をまとめる中立的なモデレーターを1名設定してください。'
-        f'このテーマに精通した専門家でありながら中立的な立場の人物で。'
         f'必ずJSON形式で返してください: {{"name":"役職や肩書き","desc":"この人物の特徴（30〜50文字）"}}',
-        model=model,
+        model,
     )
     mod_match = re.search(r'\{[^{}]+\}', moderator_raw, re.DOTALL)
     moderator = {"name": "モデレーター", "desc": "中立的な立場で議論を整理し合意形成を促すファシリテーター"}
@@ -252,11 +308,11 @@ def setup():
 @app.route('/run_discussion')
 def run_discussion():
     theme_name = request.args.get('theme_name', '議論')
-    model = request.args.get('model', '').strip() or None
-    rounds = max(1, min(int(request.args.get('rounds', 10)), 20))
+    model      = request.args.get('model', '').strip() or 'gemma4-fast'
+    rounds     = max(1, min(int(request.args.get('rounds', 10)), 20))
     try:
-        agenda = json.loads(request.args.get('agenda', '[]'))
-        personas = json.loads(request.args.get('personas', '[]'))
+        agenda    = json.loads(request.args.get('agenda', '[]'))
+        personas  = json.loads(request.args.get('personas', '[]'))
         moderator = json.loads(request.args.get('moderator', '{}'))
     except Exception:
         agenda, personas, moderator = [], [], {}
@@ -269,154 +325,148 @@ def run_discussion():
     mod_name = moderator.get('name', 'モデレーター')
     mod_desc = moderator.get('desc', '中立的な立場で議論を整理するファシリテーター')
 
-    # ファイル準備
     reports_dir = os.path.join(os.path.dirname(__file__), 'reports')
     os.makedirs(reports_dir, exist_ok=True)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp  = datetime.now().strftime('%Y%m%d_%H%M%S')
     draft_path = os.path.join(reports_dir, f'{timestamp}_draft.md')
 
     header = (
         f"# （議論中）\n\n"
         f"**テーマ:** {theme_name}　"
         f"**開始:** {datetime.now().strftime('%Y-%m-%d %H:%M')}　"
-        f"**モデル:** {model or '不明'}\n\n"
+        f"**モデル:** {model}\n\n"
         f"**論客:** {' / '.join(p['name'] for p in personas)}\n"
         f"**まとめ役:** {mod_name}\n\n---\n\n"
     )
     with open(draft_path, 'w', encoding='utf-8') as f:
         f.write(header)
 
-    def append(text):
+    def w(text):
         try:
             with open(draft_path, 'a', encoding='utf-8') as f:
                 f.write(text)
         except Exception:
             pass
 
-    def keepalive():
-        """SSEコメント行を送ることで接続を維持する（Ollamaの待機中に使用）"""
-        return ": keepalive\n\n"
-
     def generate():
         try:
             final_report = []
 
             for agenda_idx, item in enumerate(agenda):
-                yield sse("agenda_start", index=agenda_idx + 1, total=len(agenda), item=item,
-                          draft=os.path.basename(draft_path))
-                append(f"## 議題：{item}\n\n")
-                discussion_history = []
-                last_written_round = None
+                yield sse("agenda_start", index=agenda_idx + 1, total=len(agenda),
+                          item=item, draft=os.path.basename(draft_path))
+                w(f"## 議題：{item}\n\n")
+
+                rolling_summary = ""
+                recent_rounds   = []
 
                 for round_num in range(1, rounds + 1):
-                    yield sse("round_start", round=round_num, total_rounds=rounds)
+                    yield sse("round_start", round=round_num, total_rounds=rounds, item=item)
 
+                    # ラウンド開始時のコンテキストスナップショット（全ペルソナ共有）
+                    ctx = build_context(rolling_summary, recent_rounds)
+
+                    # 4ペルソナを並列呼び出し
                     for persona in personas:
-                        role = persona['name']
-                        desc = persona['desc']
-                        others = [p['name'] for p in personas if p['name'] != role]
+                        yield sse("thinking", speaker=persona['name'], round=round_num, item=item)
+                    yield ": keepalive\n\n"
 
-                        yield sse("thinking", speaker=role, round=round_num)
-                        yield keepalive()
-
-                        if round_num == 1:
-                            system_prompt = (
-                                f"あなたは{role}です。{desc}\n"
-                                f"テーマ「{theme_name}」の議題「{item}」について、"
+                    def call(p, _ctx=ctx, _r=round_num, _item=item):
+                        others = [x['name'] for x in personas if x['name'] != p['name']]
+                        if _r == 1:
+                            sys_p = (
+                                f"あなたは{p['name']}です。{p['desc']}\n"
+                                f"テーマ「{theme_name}」の議題「{_item}」について、"
                                 f"あなた独自の立場・価値観からの主張を150文字程度で述べてください。"
-                                f"他の参加者とは全く異なる角度から発言してください。"
                             )
-                            user_prompt = f"議題「{item}」についてあなたの立場から発言してください。"
+                            usr_p = f"議題「{_item}」についてあなたの立場から発言してください。"
                         else:
-                            history_text = "\n".join(
-                                f"[R{e['round']} {e['speaker']}]: {e['response']}"
-                                for e in discussion_history
+                            sys_p = (
+                                f"あなたは{p['name']}です。{p['desc']}\n"
+                                f"第{_r}ラウンドです。特に{', '.join(others[:2])}の発言に対して、"
+                                f"相手の名前を出しながら具体的に反論・同意・補足してください。"
+                                f"具体的な数字・事例を引いて150文字程度で述べてください。"
                             )
-                            system_prompt = (
-                                f"あなたは{role}です。{desc}\n"
-                                f"第{round_num}ラウンドです。特に{', '.join(others[:2])}の発言に対して、"
-                                f"相手の名前を出しながら具体的に反論・同意・補足をしてください。"
-                                f"抽象論ではなく具体的な数字・事例・経験を引いて150文字程度で述べてください。"
-                            )
-                            user_prompt = f"これまでの議論:\n{history_text}\n\nあなたの発言:"
+                            usr_p = f"これまでの議論:\n{_ctx}\n\nあなたの発言:"
+                        return p['name'], ask(sys_p, usr_p, model)
 
-                        response = ask_gemma(system_prompt, user_prompt, model=model)
-                        discussion_history.append({"round": round_num, "speaker": role, "response": response})
+                    results = {}
+                    with ThreadPoolExecutor(max_workers=len(personas)) as ex:
+                        for fut in as_completed({ex.submit(call, p): p for p in personas}):
+                            name, resp = fut.result()
+                            results[name] = resp
 
-                        if round_num != last_written_round:
-                            append(f"### Round {round_num}\n\n")
-                            last_written_round = round_num
-                        append(f"**{role}：** {response}\n\n")
+                    w(f"### Round {round_num}\n\n")
+                    round_msgs = []
+                    for persona in personas:
+                        resp = results.get(persona['name'], "（応答なし）")
+                        round_msgs.append({"speaker": persona['name'], "response": resp})
+                        w(f"**{persona['name']}：** {resp}\n\n")
+                        yield sse("message", item=item, speaker=persona['name'],
+                                  response=resp, round=round_num)
 
-                        yield sse("message", item=item, speaker=role, response=response, round=round_num)
+                    recent_rounds.append({"round": round_num, "messages": round_msgs})
+                    if len(recent_rounds) > KEEP_RECENT_ROUNDS:
+                        oldest = recent_rounds.pop(0)
+                        rolling_summary = compress_round(rolling_summary, oldest, model)
 
                 yield sse("summarizing", item=item)
-                yield keepalive()
-                history_text = "\n".join(
-                    f"[R{e['round']} {e['speaker']}]: {e['response']}"
-                    for e in discussion_history
-                )
-                summary = ask_gemma(
+                yield ": keepalive\n\n"
+                summary = ask(
                     f"あなたは{mod_name}です。{mod_desc}\n"
                     f"議論を整理し、合意点・対立点・次のアクションを簡潔にまとめてください。",
-                    f"議題「{item}」の議論:\n{history_text}\n\nまとめ:",
-                    model=model,
+                    f"議題「{item}」の議論:\n{build_context(rolling_summary, recent_rounds)}\n\nまとめ:",
+                    model,
                 )
-                append(f"#### まとめ（{mod_name}）\n\n{summary}\n\n---\n\n")
+                w(f"#### まとめ（{mod_name}）\n\n{summary}\n\n---\n\n")
                 yield sse("summary", item=item, summary=summary)
                 final_report.append(f"議題: {item}\n結果: {summary}")
 
+            # 最終結論
             yield sse("concluding")
-            yield keepalive()
-            full_prompt = (
-                "以下の各議題の議論結果を統合し、プロジェクトの最終意思決定案と優先アクションを作成してください:\n\n"
-                + "\n\n".join(final_report)
-            )
-            conclusion = ask_gemma(
+            yield ": keepalive\n\n"
+            conclusion = ask(
                 f"あなたは{mod_name}です。{mod_desc}\n全議論を統合し、明確な意思決定と次のステップを示してください。",
-                full_prompt,
-                model=model,
+                "以下の各議題の議論結果を統合し、最終意思決定案と優先アクションを作成してください:\n\n"
+                + "\n\n".join(final_report),
+                model,
             )
-            append(f"## 最終結論（{mod_name}）\n\n{conclusion}\n")
+            w(f"## 最終結論（{mod_name}）\n\n{conclusion}\n")
             yield sse("conclusion", text=conclusion)
 
-            yield keepalive()
-            summary_for_title = "\n".join(f"- {r}" for r in final_report)
-            raw_title = ask_gemma(
-                "あなたは優秀なライターです。議論の内容を端的に表す日本語タイトルを1行だけ出力してください。記号・引用符不要。",
-                f"テーマ「{theme_name}」の議論要約:\n{summary_for_title}\n\n結論:\n{conclusion}\n\nタイトル:",
-                model=model,
+            # タイトル生成とファイル保存
+            yield ": keepalive\n\n"
+            raw_title = ask(
+                "議論の内容を端的に表す日本語タイトルを1行だけ出力してください。記号・引用符不要。",
+                f"テーマ「{theme_name}」の結論:\n{conclusion}\n\nタイトル:",
+                model,
             )
-            title = raw_title.strip().strip('#').strip('"').strip('「').strip('」').split('\n')[0].strip()
-            if not title:
-                title = theme_name
+            title = raw_title.strip().strip('#').strip('"').strip('「').strip('」').split('\n')[0].strip() or theme_name
 
             with open(draft_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             content = content.replace('# （議論中）', f'# {title}', 1)
 
-            safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
-            final_filename = f"{timestamp}_{safe_title}.md"
-            final_path = os.path.join(reports_dir, final_filename)
+            safe = re.sub(r'[\\/:*?"<>|]', '_', title)[:60]
+            final_path = os.path.join(reports_dir, f"{timestamp}_{safe}.md")
             with open(final_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             if os.path.exists(draft_path):
                 os.remove(draft_path)
 
-            yield sse("saved", filename=final_filename, filepath=final_path, title=title)
+            yield sse("saved", filename=f"{timestamp}_{safe}.md", filepath=final_path, title=title)
             yield sse("done")
 
         except Exception as e:
-            # draft が残っていれば保持（途中まで保存済み）
-            yield sse("error", message=f"サーバーエラー: {e}　（途中まで {os.path.basename(draft_path)} に保存済み）")
+            yield sse("error", message=f"エラー: {e}　（{os.path.basename(draft_path)} に途中保存済み）")
 
     return Response(
         stream_with_context(generate()),
         mimetype='text/event-stream',
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 if __name__ == '__main__':
-    # use_reloader=False: 長時間SSE接続中にreloaderがサーバーを再起動してしまうのを防ぐ
-    app.run(debug=True, use_reloader=False, port=5000)
+    ensure_ollama()
+    app.run(debug=True, use_reloader=False, port=8080)
